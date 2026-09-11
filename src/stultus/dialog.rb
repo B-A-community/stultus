@@ -46,7 +46,9 @@ module BACommunity
           style:           UI::HtmlDialog::STYLE_DIALOG
         )
         dialog.set_file(File.join(PLUGIN_PATH, 'html', 'index.html'))
-        dialog.set_on_closed { @dialog = nil }
+        # Обработчик закрытия срабатывает с опозданием: если окно закрыли и
+        # тут же открыли новое, старый обработчик обнулял ссылку уже на новое.
+        dialog.set_on_closed { @dialog = nil if @dialog.equal?(dialog) }
 
         register(dialog, 'ready') do |_id, _payload|
           {
