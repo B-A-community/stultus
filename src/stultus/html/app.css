@@ -1,0 +1,121 @@
+/*
+  Stultus — рабочие стили. Дизайн будет заменён: держите токены в :root и
+  структуру классов, остальное можно переписывать целиком.
+  Контракт DOM описан в docs/DESIGN-BRIEF.md.
+*/
+:root {
+  --bg: #1e1f22;
+  --bg-2: #26272b;
+  --bg-3: #2e3035;
+  --fg: #e6e6e6;
+  --fg-muted: #9a9ca3;
+  --line: #3a3c42;
+  --accent: #4f8cff;
+  --accent-fg: #ffffff;
+  --ok: #3ccb7f;
+  --warn: #f5a623;
+  --err: #ff5c5c;
+  --user: #2b3a55;
+  --assistant: #26272b;
+  --radius: 8px;
+  --font: "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", Consolas, "JetBrains Mono", monospace;
+  --fs: 13px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: var(--fs)/1.45 var(--font); }
+button, input, select, textarea { font: inherit; color: inherit; }
+.muted { color: var(--fg-muted); }
+[hidden] { display: none !important; }
+
+.app { display: flex; flex-direction: column; height: 100%; }
+
+/* Шапка */
+.topbar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--bg-2); }
+.topbar__title { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.topbar__name { font-weight: 600; }
+.topbar__model { color: var(--fg-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar__status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-muted); }
+.topbar__status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--err); }
+.app[data-state="connecting"] .dot { background: var(--warn); }
+.app[data-state="connected"] .dot { background: var(--ok); }
+.app[data-state="busy"] .dot { background: var(--accent); }
+.topbar__actions { display: flex; gap: 4px; }
+.iconbtn { background: transparent; border: 1px solid transparent; border-radius: 6px; width: 30px; height: 30px; cursor: pointer; color: var(--fg-muted); }
+.iconbtn:hover { background: var(--bg-3); color: var(--fg); }
+
+/* Провайдер */
+.provider { display: flex; gap: 10px; align-items: end; padding: 8px 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.provider__field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--fg-muted); flex: 1; min-width: 120px; }
+.provider select, .settings input { background: var(--bg-3); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; color: var(--fg); width: 100%; }
+.provider__toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-muted); padding-bottom: 6px; }
+
+/* Лента */
+.chat { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.chat__empty { margin: auto; max-width: 420px; text-align: center; color: var(--fg-muted); }
+.msg { border-radius: var(--radius); padding: 8px 12px; max-width: 100%; }
+.msg--user { background: var(--user); align-self: flex-end; max-width: 92%; }
+.msg--assistant { background: var(--assistant); border: 1px solid var(--line); }
+.msg--system { background: transparent; color: var(--fg-muted); font-size: 12px; text-align: center; }
+.msg--error { background: rgba(255, 92, 92, .12); border: 1px solid var(--err); }
+.msg__role { font-size: 11px; color: var(--fg-muted); margin-bottom: 4px; }
+.msg__body { white-space: pre-wrap; word-break: break-word; }
+.msg__body p { margin: 0 0 6px; }
+.msg__body pre { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; overflow-x: auto; font-family: var(--mono); font-size: 12px; white-space: pre; }
+.msg__body code { font-family: var(--mono); font-size: 12px; background: var(--bg); padding: 1px 4px; border-radius: 4px; }
+.msg__body pre code { background: none; padding: 0; }
+.msg__body ul { margin: 0 0 6px; padding-left: 18px; }
+.msg--assistant.is-streaming .msg__body::after { content: "▍"; color: var(--accent); animation: blink 1s steps(2) infinite; }
+@keyframes blink { to { opacity: 0; } }
+
+/* Инструменты */
+.tool { border: 1px solid var(--line); border-radius: 6px; background: var(--bg-2); font-size: 12px; }
+.tool__summary { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; list-style: none; }
+.tool__summary::-webkit-details-marker { display: none; }
+.tool__icon { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex: none; }
+.tool[data-state="ok"] .tool__icon { background: var(--ok); }
+.tool[data-state="error"] .tool__icon { background: var(--err); }
+.tool__name { font-family: var(--mono); color: var(--fg); }
+.tool__label { color: var(--fg-muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tool__state { color: var(--fg-muted); }
+.tool pre { margin: 0; padding: 8px 10px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 11.5px; white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; }
+.tool__result:empty { display: none; }
+
+/* Карточки: вопрос, снимок */
+.card { border: 1px solid var(--accent); border-radius: var(--radius); padding: 10px 12px; background: var(--bg-2); }
+.card--shot { border-color: var(--warn); }
+.card__title { font-weight: 600; margin-bottom: 4px; }
+.card__text { white-space: pre-wrap; margin-bottom: 8px; }
+.card__options { display: flex; flex-wrap: wrap; gap: 6px; }
+.card__preview { margin-top: 8px; max-width: 100%; border-radius: 6px; border: 1px solid var(--line); }
+.card.is-done { opacity: .6; }
+.card.is-done .card__options { display: none; }
+
+/* Композер */
+.composer { border-top: 1px solid var(--line); background: var(--bg-2); padding: 8px 12px; }
+.composer__hint { font-size: 12px; color: var(--warn); min-height: 0; }
+.composer__hint:empty { display: none; }
+.composer__row { display: flex; gap: 8px; }
+.composer textarea { flex: 1; resize: vertical; min-height: 60px; background: var(--bg-3); border: 1px solid var(--line); border-radius: 6px; padding: 8px; color: var(--fg); }
+.composer__buttons { display: flex; flex-direction: column; gap: 6px; }
+.composer__meta { font-size: 11px; margin-top: 4px; }
+
+.btn { background: var(--bg-3); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--fg-muted); }
+.btn--primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn--danger { border-color: var(--err); color: var(--err); }
+.btn:disabled { opacity: .5; cursor: default; }
+
+/* Настройки */
+.settings { position: absolute; inset: 0; background: rgba(0, 0, 0, .55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.settings__panel { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 10px; }
+.settings h2 { margin: 0 0 4px; font-size: 15px; }
+.settings label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--fg-muted); }
+.settings__buttons { display: flex; gap: 8px; }
+.settings hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+
+/* Широкое окно (второй монитор): лента не растягивается на всю ширину */
+@media (min-width: 900px) {
+  .chat { padding: 16px 10%; }
+}

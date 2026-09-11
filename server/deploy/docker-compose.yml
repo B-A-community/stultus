@@ -1,0 +1,33 @@
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: stultus-gateway:latest
+    container_name: stultus-gateway
+    restart: unless-stopped
+
+    # Сеть хоста: выход в интернет на виртуалке идёт через локальный прокси
+    # (127.0.0.1), и из сети контейнера он был бы недоступен. Побочный
+    # эффект — порт слушается напрямую, раздел ports не нужен:
+    # плагины ходят на ws://<хост>:8790/ws
+    network_mode: host
+
+    # PLUGIN_TOKEN, вход к моделям, список моделей — см. .env.example
+    env_file:
+      - /opt/stultus/.env
+
+    volumes:
+      # Сессии Claude Agent SDK: без тома продолжение разговора после
+      # перезапуска невозможно.
+      - /opt/stultus/claude:/root/.claude
+      # Вход Codex (auth.json после `codex login`) и его сессии.
+      - /opt/stultus/codex:/root/.codex
+      # Рабочий каталог моделей (AGENTS.md для Codex).
+      - /opt/stultus/data:/app/data
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,132 @@
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { mkdirSync } from 'node:fs'
+import { WebSocketServer } from 'ws'
+import { providerList, runChat } from './chat.ts'
+import { config } from './config.ts'
+import { PluginConnection, type PluginMessage } from './connection.ts'
+import { handleMcp } from './mcp.ts'
+
+const VERSION = '0.1.0'
+
+/** Живые окна SketchUp по id соединения. */
+const connections = new Map<string, PluginConnection>()
+
+mkdirSync(config.workDir, { recursive: true })
+
+function readBody(req: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    req.on('data', (c: Buffer) => chunks.push(c))
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8')
+      if (!raw) return resolve(undefined)
+      try {
+        resolve(JSON.parse(raw))
+      } catch (e) {
+        reject(e)
+      }
+    })
+    req.on('error', reject)
+  })
+}
+
+const http = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+  const url = new URL(req.url ?? '/', 'http://localhost')
+
+  if (url.pathname === '/' || url.pathname === '/health') {
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+    res.end(
+      JSON.stringify({
+        name: 'stultus-gateway',
+        version: VERSION,
+        windows: [...connections.values()].map((c) => ({
+          id: c.id,
+          model: c.instance.model_title,
+          plugin: c.instance.plugin,
+          busy: Boolean(c.running),
+        })),
+        providers: providerList().map((p) => ({ id: p.id, configured: p.configured })),
+      }),
+    )
+    return
+  }
+
+  const mcp = url.pathname.match(/^\/mcp\/([0-9a-f-]{36})$/)
+  if (mcp) {
+    const conn = connections.get(mcp[1]!)
+    if (!conn) {
+      res.writeHead(404, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ error: 'no such window' }))
+      return
+    }
+    try {
+      const body = req.method === 'POST' ? await readBody(req) : undefined
+      await handleMcp(conn, req, res, body)
+    } catch (error) {
+      console.error('[mcp]', error)
+      if (!res.headersSent) res.writeHead(500)
+      res.end()
+    }
+    return
+  }
+
+  res.writeHead(404)
+  res.end()
+})
+
+const wss = new WebSocketServer({ server: http, path: '/ws' })
+
+wss.on('connection', (ws) => {
+  const conn = new PluginConnection(ws)
+  connections.set(conn.id, conn)
+  console.log(`[ws] подключение ${conn.id.slice(0, 8)} (всего ${connections.size})`)
+
+  ws.on('message', (data) => {
+    let msg: PluginMessage
+    try {
+      msg = JSON.parse(data.toString()) as PluginMessage
+    } catch {
+      return
+    }
+    if (msg.type === 'hello') {
+      if (!config.pluginToken || msg.token !== config.pluginToken) {
+        conn.close(4401, 'bad token')
+        return
+      }
+      conn.authed = true
+      conn.instance = msg.instance ?? {}
+      conn.sessions = { ...(msg.sessions ?? {}) }
+      console.log(`[ws] ${conn.id.slice(0, 8)}: ${conn.instance.model_title ?? '?'} · SketchUp ${conn.instance.app_version ?? '?'} · плагин ${conn.instance.plugin ?? '?'}`)
+      conn.send({ type: 'welcome', version: VERSION, providers: providerList() })
+      return
+    }
+    if (!conn.authed) {
+      conn.close(4401, 'hello first')
+      return
+    }
+    switch (msg.type) {
+      case 'chat':
+        void runChat(conn, msg)
+        break
+      case 'tool_result':
+        conn.resolveTool(msg.call_id, { ok: msg.ok, content: msg.content ?? '', image: msg.image })
+        break
+      case 'cancel':
+        conn.running?.cancel()
+        break
+    }
+  })
+
+  ws.on('close', () => {
+    conn.dispose()
+    connections.delete(conn.id)
+    console.log(`[ws] отключение ${conn.id.slice(0, 8)} (всего ${connections.size})`)
+  })
+})
+
+http.listen(config.port, '0.0.0.0', () => {
+  const p = providerList()
+  console.log(`stultus-gateway ${VERSION} на :${config.port}; MCP для моделей ${config.mcpBase}/mcp/<id>`)
+  console.log(`провайдеры: ${p.map((x) => `${x.label}${x.configured ? '' : ' (не настроен)'}`).join(', ')}`)
+  if (!config.pluginToken) console.warn('PLUGIN_TOKEN не задан — плагины не будут приняты')
+})

@@ -1,0 +1,8 @@
+# Нормализуем переводы строк: в репозитории LF, на checkout — по системе.
+* text=auto
+
+# Бинарные артефакты
+*.rbz binary
+*.png binary
+*.jpg binary
+*.ico binary

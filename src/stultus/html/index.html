@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stultus</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<!--
+  Структура DOM — контракт для дизайна (см. docs/DESIGN-BRIEF.md).
+  Имена классов и data-атрибуты стабильны: JS ищет элементы по ним.
+-->
+<div id="app" class="app" data-state="disconnected">
+
+  <header class="topbar">
+    <div class="topbar__title">
+      <span class="topbar__name">Stultus</span>
+      <span class="topbar__model" id="modelTitle">—</span>
+    </div>
+    <div class="topbar__status" id="connStatus" title="Соединение с gateway">
+      <span class="dot"></span><span class="topbar__statusText">не подключено</span>
+    </div>
+    <div class="topbar__actions">
+      <button class="iconbtn" id="btnNew" title="Новый разговор (история сохраняется в модели и будет очищена)">✚</button>
+      <button class="iconbtn" id="btnSettings" title="Настройки">⚙</button>
+    </div>
+  </header>
+
+  <section class="provider">
+    <label class="provider__field">
+      <span>Провайдер</span>
+      <select id="providerSelect"></select>
+    </label>
+    <label class="provider__field">
+      <span>Модель</span>
+      <select id="modelSelect"></select>
+    </label>
+    <label class="provider__toggle" title="Прикладывать краткий снимок сцены к каждому сообщению">
+      <input type="checkbox" id="attachScene" checked>
+      <span>сцена в запросе</span>
+    </label>
+  </section>
+
+  <main class="chat" id="chat" aria-live="polite">
+    <div class="chat__empty" id="chatEmpty">
+      <p>Опишите, что построить или изменить в открытой модели.</p>
+      <p class="muted">Модель работает через Ruby API SketchUp, каждый её ход — один пункт Undo. Снимок вьюпорта делается только с вашего согласия.</p>
+    </div>
+  </main>
+
+  <footer class="composer">
+    <div class="composer__hint" id="composerHint"></div>
+    <div class="composer__row">
+      <textarea id="input" rows="3" placeholder="Сообщение модели… (Ctrl+Enter — отправить)"></textarea>
+      <div class="composer__buttons">
+        <button class="btn btn--primary" id="btnSend">Отправить</button>
+        <button class="btn btn--danger" id="btnCancel" hidden>Стоп</button>
+      </div>
+    </div>
+    <div class="composer__meta">
+      <span id="usage" class="muted"></span>
+    </div>
+  </footer>
+
+  <!-- Панель настроек: адрес gateway, пропуск. -->
+  <aside class="settings" id="settings" hidden>
+    <div class="settings__panel">
+      <h2>Настройки</h2>
+      <label>Адрес gateway
+        <input type="text" id="setGateway" placeholder="ws://192.168.10.94:8790/ws" spellcheck="false">
+      </label>
+      <label>Пропуск (token)
+        <input type="password" id="setToken" spellcheck="false" autocomplete="off">
+      </label>
+      <p class="muted">Ключи к моделям живут на gateway. Здесь только адрес сервера и пропуск, они хранятся на этом компьютере, в файл модели не попадают.</p>
+      <div class="settings__buttons">
+        <button class="btn btn--primary" id="btnSaveSettings">Сохранить и подключиться</button>
+        <button class="btn" id="btnCloseSettings">Закрыть</button>
+      </div>
+      <hr>
+      <button class="btn btn--danger" id="btnClearHistory">Очистить переписку в этой модели</button>
+      <p class="muted" id="settingsInfo"></p>
+    </div>
+  </aside>
+
+</div>
+
+<!-- Шаблоны карточек: клонируются JS-ом. -->
+<template id="tplMessage">
+  <article class="msg">
+    <div class="msg__role"></div>
+    <div class="msg__body"></div>
+  </article>
+</template>
+
+<template id="tplTool">
+  <details class="tool">
+    <summary class="tool__summary">
+      <span class="tool__icon"></span>
+      <span class="tool__name"></span>
+      <span class="tool__label"></span>
+      <span class="tool__state"></span>
+    </summary>
+    <pre class="tool__args"></pre>
+    <pre class="tool__result"></pre>
+  </details>
+</template>
+
+<template id="tplAsk">
+  <div class="card card--ask">
+    <div class="card__title">Вопрос от модели</div>
+    <div class="card__text"></div>
+    <div class="card__options"></div>
+  </div>
+</template>
+
+<template id="tplShot">
+  <div class="card card--shot">
+    <div class="card__title">Модель просит снимок вьюпорта</div>
+    <div class="card__text"></div>
+    <div class="card__options">
+      <button class="btn btn--primary" data-act="allow">Сделать снимок</button>
+      <button class="btn" data-act="deny">Отказать</button>
+    </div>
+    <img class="card__preview" alt="" hidden>
+  </div>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>

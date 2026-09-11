@@ -1,0 +1,139 @@
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import { z } from 'zod'
+import type { PluginConnection } from './connection.ts'
+
+/**
+ * MCP-сервер «stultus» — инструменты одного окна SketchUp.
+ *
+ * Модель (процесс Claude Code или Codex на этой же машине) ходит сюда по
+ * Streamable HTTP: POST /mcp/<connection-id> с bearer-пропуском соединения.
+ * Каждый инструмент — это запрос плагину по WebSocket и ожидание ответа.
+ *
+ * Без сессий MCP (stateless): на каждый запрос новый сервер и транспорт.
+ * Инструментов пять, состояния между вызовами нет — держать сессии незачем,
+ * а без них не бывает «протухших» сессий после перезапуска.
+ */
+export const MCP_SERVER_NAME = 'stultus'
+
+/** Что модель называет в описаниях — единый источник для обоих провайдеров. */
+export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'take_screenshot', 'undo', 'ask_user'] as const
+
+function build(conn: PluginConnection): McpServer {
+  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.1.0' })
+
+  server.registerTool(
+    'execute_ruby',
+    {
+      title: 'Выполнить Ruby в SketchUp',
+      description:
+        'Исполняет Ruby-код в открытой модели SketchUp (Ruby API). Возвращает inspect последнего ' +
+        'выражения и stdout. Весь вызов — одна операция Undo; ошибка откатывает всё. Длины в API — ' +
+        'дюймы: используй .mm на каждой длине. Не оборачивай в start_operation. Код исполняется на ' +
+        'главном потоке и не прерывается — дроби тяжёлое на части, не пиши скрипты длиннее ~150 строк.',
+      inputSchema: {
+        code: z.string().describe('Ruby-код'),
+        label: z.string().max(60).optional().describe('Короткое имя действия для пункта Undo, по-русски'),
+      },
+    },
+    async ({ code, label }) => {
+      const r = await conn.callTool('execute_ruby', { code, label })
+      return { content: [{ type: 'text', text: r.content }], isError: !r.ok }
+    },
+  )
+
+  server.registerTool(
+    'get_scene',
+    {
+      title: 'Снимок сцены',
+      description:
+        'Краткое состояние открытой модели: единицы, выделение, объекты верхнего уровня (id, тип, имя, ' +
+        'слой, материал, габариты в мм), слои, материалы, камера, режим редактирования группы. ' +
+        'Список объектов ограничен; глубже — через execute_ruby.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => {
+      const r = await conn.callTool('get_scene', {})
+      return { content: [{ type: 'text', text: r.content }], isError: !r.ok }
+    },
+  )
+
+  server.registerTool(
+    'take_screenshot',
+    {
+      title: 'Снимок вьюпорта',
+      description:
+        'Просит у пользователя снимок вьюпорта SketchUp. Пользователь увидит твою причину и нажмёт ' +
+        '«Сделать снимок» или «Отказать». Снимок приходит картинкой. Можно попросить стандартный вид ' +
+        'и «показать всё» — камера пользователя после снимка вернётся на место. Проси, когда нужно ' +
+        'проверить форму или компоновку; отказ — не ошибка.',
+      inputSchema: {
+        reason: z.string().describe('Зачем нужен снимок, одной фразой по-русски'),
+        view: z.enum(['current', 'iso', 'top', 'front', 'right', 'back', 'left']).optional().describe('Ракурс; по умолчанию текущий'),
+        zoom_extents: z.boolean().optional().describe('Показать всю модель в кадре'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ reason, view, zoom_extents }) => {
+      const r = await conn.callTool('take_screenshot', { reason, view: view === 'current' ? undefined : view, zoom_extents })
+      const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [
+        { type: 'text', text: r.content },
+      ]
+      if (r.image) content.push({ type: 'image', data: r.image.base64, mimeType: r.image.mime })
+      return { content, isError: !r.ok }
+    },
+  )
+
+  server.registerTool(
+    'undo',
+    {
+      title: 'Отменить',
+      description: 'Отменяет последнюю операцию в SketchUp (в том числе твой последний execute_ruby).',
+      inputSchema: {},
+    },
+    async () => {
+      const r = await conn.callTool('undo', {})
+      return { content: [{ type: 'text', text: r.content }], isError: !r.ok }
+    },
+  )
+
+  server.registerTool(
+    'ask_user',
+    {
+      title: 'Спросить пользователя',
+      description:
+        'Задать пользователю вопрос и закончить ход. Ответ придёт следующим сообщением. Используй, ' +
+        'когда не хватает размера, места или смысла — не угадывай.',
+      inputSchema: {
+        question: z.string().describe('Вопрос по-русски'),
+        options: z.array(z.string()).max(6).optional().describe('Варианты ответа кнопками'),
+      },
+    },
+    async ({ question, options }) => {
+      const r = await conn.callTool('ask_user', { question, options })
+      return { content: [{ type: 'text', text: r.content }], isError: !r.ok }
+    },
+  )
+
+  return server
+}
+
+/** Обработать один HTTP-запрос к MCP этого соединения. */
+export async function handleMcp(conn: PluginConnection, req: IncomingMessage, res: ServerResponse, body: unknown): Promise<void> {
+  const auth = req.headers.authorization ?? ''
+  if (auth !== `Bearer ${conn.mcpToken}`) {
+    res.writeHead(401, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ error: 'unauthorized' }))
+    return
+  }
+  const server = build(conn)
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
+  res.on('close', () => {
+    void transport.close()
+    void server.close()
+  })
+  await server.connect(transport)
+  await transport.handleRequest(req, res, body)
+}

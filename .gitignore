@@ -1,0 +1,14 @@
+# Собранные пакеты не выкладываем: релиза нет, сборка локальная
+build/
+*.rbz
+
+# Gateway
+server/node_modules/
+server/dist/
+server/data/
+server/.env
+.env
+
+# Локальная конфигурация инструментов разработки
+.claude/
+*.log

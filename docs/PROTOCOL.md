@@ -1,0 +1,115 @@
+# Протокол Stultus
+
+Два канала. Оба — JSON.
+
+```
+SketchUp (Ruby) ◄─ sketchup.callback / execute_script ─► окно плагина (JS)
+                                                              │
+                                                     WebSocket, исходящий
+                                                              ▼
+                                                      gateway на виртуалке
+                                                              │
+                                              MCP (Streamable HTTP, localhost)
+                                                              ▼
+                                                  Claude Code / Codex (процесс)
+```
+
+## 1. Окно ↔ Ruby
+
+JS зовёт `sketchup.<имя>(id, json)`, Ruby отвечает
+`window.Stultus.receive({ id, result })`. Все ответы асинхронные. В `result`
+всегда есть `ok` (Ruby добавляет `ok: true`, если обработчик его не вернул).
+
+| Вызов | Аргументы | Ответ |
+|---|---|---|
+| `ready` | — | `{ settings, history, sessions, instance, scene }` |
+| `scene_state` | — | снимок сцены (см. ниже) |
+| `execute_ruby` | `{ code, label? }` | `{ ok, result, output }` или `{ ok: false, error, backtrace[], output }` |
+| `undo` | — | `{ ok }` |
+| `screenshot` | `{ view?, zoom_extents?, width?, height? }` | `{ ok, mime, base64, width, height, bytes }` |
+| `save_history` | `{ messages[] }` | `{ saved }` — сколько сообщений влезло под лимит |
+| `save_sessions` | `{ sessions: { claude?, codex? } }` | `{ ok }` |
+| `clear_history` | — | `{ ok }` |
+| `save_settings` | `{ settings }` | `{ settings }` — полный набор после записи |
+| `open_url` | `{ url }` | `{ ok }` |
+
+Снимок сцены:
+
+```jsonc
+{
+  "title": "Дом", "path": "C:/…/дом.skp",
+  "units": { "length": "mm", "api": "inch" },
+  "context": null,                       // или путь редактируемой группы
+  "counts": { "Group": 12, "Face": 340, "Edge": 900 },
+  "selection": [ { "id": 123, "type": "Group", "name": "Стена", "bounds_mm": {…} } ],
+  "objects": [ { "id": 45, "type": "ComponentInstance", "name": "Окно", "definition": "Окно 1200",
+                 "layer": "стекло", "material": "Стекло", "bounds_mm": { "min": [0,0,0], "max": [1200,100,1500], "size": [1200,100,1500] } } ],
+  "objects_total": 12, "truncated": false,
+  "layers": ["Layer0", "стекло"], "materials": ["Стекло"],
+  "camera": { "eye": [...], "target": [...], "perspective": true },
+  "plugin": "0.1.0"
+}
+```
+
+Формат сообщения истории (то, что уходит в файл модели):
+
+```jsonc
+{ "role": "user" | "assistant", "text": "…", "at": "2026-09-11T18:00:00Z",
+  "provider": "Claude",                                   // только у assistant
+  "tools": [ { "name": "execute_ruby", "label": "стена", "ok": true } ] }
+```
+
+Картинки в историю не пишутся.
+
+## 2. Окно ↔ gateway (WebSocket `/ws`)
+
+### Плагин → gateway
+
+| type | Поля | Смысл |
+|---|---|---|
+| `hello` | `token`, `instance`, `sessions` | Первое сообщение. Плохой пропуск — закрытие с кодом 4401 |
+| `chat` | `turn`, `text`, `provider`, `model`, `scene`, `sessions` | Ход пользователя. `scene` — снимок сцены или `null` |
+| `tool_result` | `call_id`, `ok`, `content`, `image?` | Ответ на `tool_call`. `image = { mime, base64 }` только у снимка |
+| `cancel` | — | Прервать текущий ход |
+
+### Gateway → плагин
+
+| type | Поля | Смысл |
+|---|---|---|
+| `welcome` | `version`, `providers[]` | После принятого `hello`. `providers[i] = { id, label, configured, models[], default }` |
+| `turn_start` | `turn` | Ход принят |
+| `status` | `text` | Строка состояния («модель думает…») |
+| `text` | `delta` | Кусок текста ответа |
+| `text_replace` | `text` | Полная замена текущего пузыря (провайдеры без дельт) |
+| `tool_call` | `call_id`, `name`, `args` | Выполнить инструмент и ответить `tool_result` |
+| `ask` | `question`, `options[]` | Вопрос пользователю (карточка) |
+| `session` | `provider`, `id` | Идентификатор сессии провайдера — плагин сохраняет в модель |
+| `done` | `usage?` | Ход окончен. `usage = { input, output, cached, cost? }` |
+| `error` | `message` | Ход оборван с ошибкой |
+
+### Инструменты (`tool_call.name`)
+
+| name | args | Кто отвечает |
+|---|---|---|
+| `execute_ruby` | `{ code, label? }` | Ruby, сразу |
+| `get_scene` | `{}` | Ruby, сразу |
+| `take_screenshot` | `{ reason, view?, zoom_extents? }` | **пользователь**: карточка «Сделать снимок / Отказать» |
+| `undo` | `{}` | Ruby, сразу |
+| `ask_user` | `{ question, options? }` | JS показывает карточку и сразу отвечает «вопрос показан, закончи ход» |
+
+## 3. Gateway ↔ модель (MCP)
+
+Gateway поднимает для каждого подключённого окна MCP-сервер `stultus` по
+адресу `http://127.0.0.1:<port>/mcp/<connection-id>` с bearer-пропуском,
+уникальным для соединения. Инструменты — те же пять, что выше; каждый вызов
+превращается в `tool_call` по WebSocket и ждёт `tool_result`
+(`TOOL_TIMEOUT_MS`, по умолчанию 10 минут).
+
+Claude Agent SDK получает сервер через `mcpServers` (`type: http`), Codex —
+через `-c mcp_servers.stultus.url=…` и `bearer_token_env_var`.
+
+Ход = `query()` (Claude) или `thread.runStreamed()` (Codex) с промптом
+«текст пользователя + снимок сцены в json». Продолжение разговора —
+`resume: session_id` / `resumeThread(thread_id)`; идентификаторы лежат в
+файле модели (`sessions`), поэтому переписка переживает перезапуск SketchUp,
+пока gateway помнит сессию (тома `/root/.claude`, `/root/.codex`).
