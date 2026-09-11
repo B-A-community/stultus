@@ -23,7 +23,8 @@ JS зовёт `sketchup.<имя>(id, json)`, Ruby отвечает
 | Вызов | Аргументы | Ответ |
 |---|---|---|
 | `ready` | — | `{ settings, history, sessions, instance, scene }` |
-| `scene_state` | — | снимок сцены (см. ниже) |
+| `scene_state` | `{ full? }` | снимок сцены (см. ниже); `full: false` — только единицы, контекст и выделение |
+| `select` | `{ ids[], mode?, zoom? }` | `{ selected, text, missing_ids?, outside_context_ids? }` |
 | `execute_ruby` | `{ code, label? }` | `{ ok, result, output }` или `{ ok: false, error, backtrace[], output }` |
 | `undo` | — | `{ ok }` |
 | `screenshot` | `{ view?, zoom_extents?, width?, height? }` | `{ ok, mime, base64, width, height, bytes }` |
@@ -32,6 +33,8 @@ JS зовёт `sketchup.<имя>(id, json)`, Ruby отвечает
 | `clear_history` | — | `{ ok }` |
 | `save_settings` | `{ settings }` | `{ settings }` — полный набор после записи |
 | `open_url` | `{ url }` | `{ ok }` |
+
+Ruby → JS без запроса: `window.Stultus.selection({ count, text, by_type, definitions })` при каждом изменении выделения в SketchUp (наблюдатель живёт, пока открыто окно).
 
 Снимок сцены:
 
@@ -93,6 +96,7 @@ JS зовёт `sketchup.<имя>(id, json)`, Ruby отвечает
 |---|---|---|
 | `execute_ruby` | `{ code, label? }` | Ruby, сразу |
 | `get_scene` | `{}` | Ruby, сразу |
+| `select` | `{ ids?, mode?, zoom? }` | Ruby, сразу |
 | `take_screenshot` | `{ reason, view?, zoom_extents? }` | **пользователь**: карточка «Сделать снимок / Отказать» |
 | `undo` | `{}` | Ruby, сразу |
 | `ask_user` | `{ question, options? }` | JS показывает карточку и сразу отвечает «вопрос показан, закончи ход» |

@@ -1,0 +1,3 @@
+d = BACommunity::Stultus::Dialog.instance_variable_get(:@dialog)
+d.add_action_callback('dbg2') { |_c, s| File.write('C:/work/maksar-ruslan/staltus/build/dbg.txt', s.to_s) }
+d.execute_script("sketchup.dbg2(JSON.stringify({state: document.getElementById('app').dataset.state, busy: document.getElementById('btnSend').disabled, cancelHidden: document.getElementById('btnCancel').hidden, input: document.getElementById('input').value.slice(0,40), hint: document.getElementById('composerHint').textContent, provider: document.getElementById('providerSelect').value, msgs: document.querySelectorAll('.msg').length}))")

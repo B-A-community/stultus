@@ -49,6 +49,7 @@ module BACommunity
         # Обработчик закрытия срабатывает с опозданием: если окно закрыли и
         # тут же открыли новое, старый обработчик обнулял ссылку уже на новое.
         dialog.set_on_closed do
+          log("on_closed: current=#{@dialog.equal?(dialog)} visible=#{(dialog.visible? rescue '?')}")
           if @dialog.equal?(dialog)
             @dialog = nil
             Selection.detach
@@ -149,6 +150,14 @@ module BACommunity
         result = { ok: true }.merge(result) if result.is_a?(Hash) && !result.key?(:ok) && !result.key?('ok')
         script = "window.Stultus && window.Stultus.receive(#{JSON.generate({ id: id, result: result })});"
         dialog.execute_script(script)
+      end
+
+      # Журнал окна — в %TEMP%/stultus_dialog.log; нужен, чтобы ловить
+      # события CEF, которые иначе не видны (когда и почему окно «закрылось»).
+      def log(line)
+        File.open(File.join(ENV['TEMP'] || Dir.tmpdir, 'stultus_dialog.log'), 'a') { |f| f.puts("#{Time.now.strftime('%H:%M:%S')} #{line}") }
+      rescue StandardError
+        nil
       end
 
       def instance_info
