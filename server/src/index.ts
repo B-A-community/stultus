@@ -5,6 +5,7 @@ import { providerList, runChat } from './chat.ts'
 import { config } from './config.ts'
 import { PluginConnection, type PluginMessage } from './connection.ts'
 import { handleMcp } from './mcp.ts'
+import { renderConfigured } from './render.ts'
 
 const VERSION = '0.1.0'
 
@@ -39,6 +40,7 @@ const http = createServer(async (req: IncomingMessage, res: ServerResponse) => {
       JSON.stringify({
         name: 'stultus-gateway',
         version: VERSION,
+        image_generation: { provider: 'codex', configured: renderConfigured() },
         windows: [...connections.values()].map((c) => ({
           id: c.id,
           model: c.instance.model_title,
@@ -109,7 +111,7 @@ wss.on('connection', (ws) => {
         void runChat(conn, msg)
         break
       case 'tool_result':
-        conn.resolveTool(msg.call_id, { ok: msg.ok, content: msg.content ?? '', image: msg.image })
+        conn.resolveTool(msg.call_id, { ok: msg.ok, content: msg.content ?? '', image: msg.image, capture: msg.capture })
         break
       case 'cancel':
         conn.running?.cancel()

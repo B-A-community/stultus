@@ -59,6 +59,12 @@ export const config = {
     .filter(Boolean),
   codexDefaultModel: process.env.CODEX_DEFAULT_MODEL ?? 'gpt-5.5',
 
+  /** Native image generation via Codex login, separate from the chat provider. */
+  renderEnabled: process.env.RENDER_ENABLED === '1',
+  renderCodexPath: process.env.RENDER_CODEX_PATH ?? '',
+  renderModel: process.env.RENDER_MODEL ?? '',
+  renderTimeoutMs: Number(process.env.RENDER_TIMEOUT_MS ?? 10 * 60 * 1000),
+
   /**
    * Потолок кругов «инструмент → ответ» на один ход. Страховка от
    * зацикливания, а не бюджет: цикл «построил → посмотрел → поправил»

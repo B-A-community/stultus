@@ -10,6 +10,8 @@
 # Оверлеи инструментов в write_image не попадают — снимается только модель.
 
 require 'base64'
+require 'securerandom'
+require 'tmpdir'
 
 module BACommunity
   module Stultus
@@ -28,6 +30,30 @@ module BACommunity
       }.freeze
 
       module_function
+
+      # Постпродакшн начинает ровно с того кадра, который выставил человек.
+      # Framebuffer сохраняет двухточечную перспективу, кадрирование и формат
+      # вьюпорта. Не задаём width/height и вообще не вызываем setters камеры.
+      def capture_current
+        view = Sketchup.active_model.active_view
+        path = File.join(temp_dir, "stultus_frame_#{SecureRandom.hex(12)}.png")
+        view.refresh
+        ok = view.write_image(filename: path, source: :framebuffer)
+        raise 'Не удалось сохранить текущий кадр' unless ok && File.file?(path)
+        data = File.binread(path)
+        raise 'Снимок не является PNG' unless data.start_with?("\x89PNG\r\n\x1a\n".b)
+        width, height = data.byteslice(16, 8).unpack('NN')
+        cam = view.camera
+        { ok: true, mime: 'image/png', base64: Base64.strict_encode64(data),
+          width: width, height: height, bytes: data.bytesize, framing: 'viewport',
+          camera: { eye: cam.eye.to_a, target: cam.target.to_a, up: cam.up.to_a,
+                    perspective: cam.perspective?, two_point: cam.is_2d?,
+                    aspect_ratio: cam.aspect_ratio } }
+      rescue StandardError => e
+        { ok: false, error: "#{e.class}: #{e.message}" }
+      ensure
+        File.delete(path) if path && File.file?(path)
+      end
 
       # Возвращает { ok:, mime:, base64:, width:, height: } или { ok: false, error: }.
       def take(view_name: nil, zoom_extents: false, width: 1280, height: 800)

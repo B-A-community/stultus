@@ -73,6 +73,8 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var app = $('app'), chat = $('chat'), input = $('input');
+  var renders = window.StultusRender({ rb: rb, chat: chat, send: send, scroll: scrollDown, hideEmpty: hideEmpty,
+    persist: persist, remember: function (message) { finishCurrent(); state.messages.push(message); } });
 
   // ---------- Рендер ------------------------------------------------------
   function escapeHtml(s) {
@@ -140,6 +142,7 @@
     var a = call.args || {};
     if (call.name === 'execute_ruby') return a.label || (String(a.code || '').split('\n')[0].slice(0, 80));
     if (call.name === 'take_screenshot') return a.reason || '';
+    if (call.name === 'render_viewport') return 'Постпродакшн текущего кадра';
     if (call.name === 'ask_user') return a.question || '';
     if (call.name === 'select') return a.mode === 'clear' ? 'снять выделение' : 'выделить ' + ((a.ids || []).length) + ' объект(ов)';
     return '';
@@ -165,6 +168,7 @@
   }
 
   function setBusy(b) {
+    if (!b) renders.cancel();
     state.busy = b;
     app.dataset.state = b ? 'busy' : state.wsState;
     $('btnSend').disabled = b;
@@ -180,9 +184,11 @@
 
   // ---------- История -----------------------------------------------------
   function restoreHistory(messages) {
-    chat.querySelectorAll('.msg, .tool, .card').forEach(function (n) { n.remove(); });
+    renders.cancel();
+    chat.querySelectorAll('.msg, .tool, .card, .render').forEach(function (n) { n.remove(); });
     state.messages = messages || [];
     state.messages.forEach(function (m) {
+      if (m.render) { renders.restore(m.render); return; }
       if (m.role === 'user') addMessage('user', m.text);
       else if (m.role === 'assistant') {
         (m.tools || []).forEach(function (t) {
@@ -244,6 +250,8 @@
 
   function handle(msg) {
     switch (msg.type) {
+      case 'render_status': renders.status(msg); break;
+      case 'render_result': renders.result(msg); break;
       case 'welcome':
         state.providers = msg.providers || [];
         setStatus('connected', 'gateway ' + (msg.version || ''));
@@ -437,6 +445,7 @@
     state.current.tools.push(record);
 
     if (msg.name === 'take_screenshot') return onScreenshotRequest(msg, record);
+    if (msg.name === 'render_viewport') return renders.request(msg, record);
     if (msg.name === 'ask_user') return onAskTool(msg, record);
 
     var el = addTool(msg);
@@ -548,7 +557,7 @@
 
   // ---------- События -----------------------------------------------------
   $('btnSend').onclick = sendChat;
-  $('btnCancel').onclick = function () { send({ type: 'cancel' }); hint('Останавливаю…'); };
+  $('btnCancel').onclick = function () { renders.cancel(); send({ type: 'cancel' }); hint('Останавливаю…'); };
   input.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendChat(); }
   });

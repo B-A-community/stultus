@@ -3,6 +3,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
 import type { PluginConnection } from './connection.ts'
+import { randomUUID } from 'node:crypto'
+import { pngImage, renderConfigured, renderViewport } from './render.ts'
 
 /**
  * MCP-сервер «stultus» — инструменты одного окна SketchUp.
@@ -18,10 +20,45 @@ import type { PluginConnection } from './connection.ts'
 export const MCP_SERVER_NAME = 'stultus'
 
 /** Что модель называет в описаниях — единый источник для обоих провайдеров. */
-export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'undo', 'ask_user'] as const
+export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'undo', 'ask_user'] as const
 
 function build(conn: PluginConnection): McpServer {
   const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.1.0' })
+
+  server.registerTool('render_viewport', {
+    title: 'Визуализация текущего кадра',
+    description: 'Создаёт постпродакшн-картинку из точно выставленного пользователем вьюпорта. ' +
+      'Плагин попросит согласие, зафиксирует текущий кадр и передаст его встроенному генератору Codex. ' +
+      'Камера, выделение и геометрия не меняются. Результат появляется в чате с исходником и кнопкой сохранения. ' +
+      'Используй только по просьбе сделать визуализацию/рендер/постпродакшн. Не вызывай select с zoom или ' +
+      'execute_ruby перед этим: ракурс уже выбрал пользователь. Не нужен отдельный take_screenshot.',
+    inputSchema: { prompt: z.string().trim().min(1).max(6000).describe('Пожелания к свету, материалам и атмосфере; сохранить архитектуру и ракурс') },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+  }, async ({ prompt }) => {
+    const id = randomUUID(), signal = conn.running?.signal
+    try {
+      if (!renderConfigured()) throw new Error('Генерация ещё не подключена: нужен вход Codex на gateway и RENDER_ENABLED=1.')
+      if (!signal || signal.aborted) throw new Error('Визуализация доступна только в активном ходе пользователя.')
+      const shot = await conn.callTool('render_viewport', { prompt, render_id: id })
+      if (!shot.ok || !shot.image) return { content: [{ type: 'text' as const, text: shot.content || 'Пользователь не разрешил визуализацию.' }], isError: !shot.ok }
+      signal.throwIfAborted()
+      if (shot.capture?.framing !== 'viewport') throw new Error('Обновите плагин: снимок должен сохранять кадрирование вьюпорта.')
+      const source = pngImage(shot.image.base64)
+      conn.send({ type: 'render_status', id, text: 'Создаю визуализацию. Это может занять несколько минут…' })
+      const image = await renderViewport(source, prompt, signal)
+      signal.throwIfAborted()
+      conn.send({ type: 'render_result', id, prompt, source, image })
+      const changedRatio = Math.abs(image.width / image.height / (source.width / source.height) - 1) > 0.02
+      return { content: [
+        { type: 'text' as const, text: `Постпродакшн-кадр ${image.width}×${image.height} показан пользователю. Исходник ${source.width}×${source.height}. Геометрия SketchUp не менялась. Это ИИ-визуализация: сравни её с исходником, не обещай точность геометрии.` + (changedRatio ? ' Формат результата отличается от исходного — сообщи пользователю.' : '') },
+        { type: 'image' as const, data: image.base64, mimeType: image.mime },
+      ] }
+    } catch (error) {
+      const text = signal?.aborted ? 'Визуализация остановлена.' : error instanceof Error ? error.message : String(error)
+      conn.send({ type: 'render_status', id, text, failed: true })
+      return { content: [{ type: 'text' as const, text }], isError: true }
+    }
+  })
 
   server.registerTool(
     'execute_ruby',

@@ -87,12 +87,14 @@ export async function runChat(conn: PluginConnection, msg: Extract<PluginMessage
   if (msg.sessions) conn.sessions = { ...conn.sessions, ...msg.sessions }
 
   const controller = new AbortController()
-  conn.running = { turn: msg.turn, cancel: () => controller.abort() }
+  conn.running = { turn: msg.turn, cancel: () => controller.abort(), signal: controller.signal }
   conn.send({ type: 'turn_start', turn: msg.turn })
 
   const model = msg.model && provider.models.includes(msg.model) ? msg.model : provider.default
   const prompt = buildPrompt(msg.text, msg.scene)
   const started = Date.now()
+  const initialToolCalls = conn.toolCalls
+  let producedOutput = false
 
   /**
    * Один запуск провайдера. Возвращает, успел ли он что-то отдать: по этому
@@ -104,10 +106,12 @@ export async function runChat(conn: PluginConnection, msg: Extract<PluginMessage
     for await (const piece of provider.run(conn, { prompt, model, resume, signal: controller.signal })) {
       switch (piece.kind) {
         case 'text':
+          producedOutput = true
           produced = true
           conn.send({ type: 'text', delta: piece.text })
           break
         case 'text_replace':
+          producedOutput = true
           produced = true
           conn.send({ type: 'text_replace', text: piece.text })
           break
@@ -137,7 +141,8 @@ export async function runChat(conn: PluginConnection, msg: Extract<PluginMessage
       // домашней виртуалки на офисную, переустановка) — тогда провайдер её
       // не находит. Это не повод ронять ход: начинаем разговор заново и
       // говорим об этом пользователю.
-      if (!resume || controller.signal.aborted) throw error
+      // Never replay a turn that already changed the model or started a paid render.
+      if (!resume || controller.signal.aborted || producedOutput || conn.toolCalls !== initialToolCalls) throw error
       const message = error instanceof Error ? error.message : String(error)
       console.warn(`[ход ${msg.turn}] продолжить сессию не удалось (${message}); начинаю заново`)
       delete conn.sessions[msg.provider]

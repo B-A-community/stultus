@@ -18,6 +18,7 @@ export interface ToolResult {
   ok: boolean
   content: string
   image?: { mime: string; base64: string }
+  capture?: { framing: string; width: number; height: number }
 }
 
 /** Сообщения плагин → gateway. */
@@ -32,7 +33,7 @@ export type PluginMessage =
       scene?: unknown
       sessions?: Record<string, string>
     }
-  | { type: 'tool_result'; call_id: string; ok: boolean; content?: string; image?: { mime: string; base64: string } }
+  | { type: 'tool_result'; call_id: string; ok: boolean; content?: string; image?: { mime: string; base64: string }; capture?: ToolResult['capture'] }
   | { type: 'cancel' }
 
 /** Сообщения gateway → плагин. */
@@ -47,6 +48,8 @@ export type GatewayMessage =
   | { type: 'session'; provider: string; id: string }
   | { type: 'done'; usage?: Usage }
   | { type: 'error'; message: string }
+  | { type: 'render_status'; id: string; text: string; failed?: boolean }
+  | { type: 'render_result'; id: string; prompt: string; source: import('./render.ts').RenderImage; image: import('./render.ts').RenderImage }
 
 export interface ProviderInfo {
   id: string
@@ -78,9 +81,10 @@ export class PluginConnection {
   sessions: Record<string, string> = {}
   authed = false
   /** Текущий ход — есть ли он и как его прервать. */
-  running: { turn: number; cancel: () => void } | null = null
+  running: { turn: number; cancel: () => void; signal: AbortSignal } | null = null
+  toolCalls = 0
 
-  private pending = new Map<string, { resolve: (r: ToolResult) => void; timer: NodeJS.Timeout }>()
+  private pending = new Map<string, { resolve: (r: ToolResult) => void; timer: NodeJS.Timeout; cleanup: () => void }>()
   private readonly ws: WebSocket
 
   constructor(ws: WebSocket) {
@@ -98,6 +102,9 @@ export class PluginConnection {
 
   /** Попросить плагин выполнить инструмент и дождаться ответа. */
   callTool(name: string, args: Record<string, unknown>): Promise<ToolResult> {
+    const signal = this.running?.signal
+    if (signal?.aborted) return Promise.resolve({ ok: false, content: 'Ход остановлен.' })
+    this.toolCalls++
     const call_id = randomUUID()
     const started = Date.now()
     const label = typeof args.label === 'string' ? args.label : typeof args.reason === 'string' ? args.reason : ''
@@ -108,10 +115,11 @@ export class PluginConnection {
         resolve(result)
       }
       const timer = setTimeout(() => {
-        this.pending.delete(call_id)
-        finish({ ok: false, content: `Плагин не ответил за ${Math.round(config.toolTimeoutMs / 1000)} с.` })
+        this.resolveTool(call_id, { ok: false, content: `Плагин не ответил за ${Math.round(config.toolTimeoutMs / 1000)} с.` })
       }, config.toolTimeoutMs)
-      this.pending.set(call_id, { resolve: finish, timer })
+      const onAbort = () => this.resolveTool(call_id, { ok: false, content: 'Ход остановлен.' })
+      this.pending.set(call_id, { resolve: finish, timer, cleanup: () => signal?.removeEventListener('abort', onAbort) })
+      signal?.addEventListener('abort', onAbort, { once: true })
       this.send({ type: 'tool_call', call_id, name, args })
     })
   }
@@ -121,6 +129,7 @@ export class PluginConnection {
     const entry = this.pending.get(call_id)
     if (!entry) return
     clearTimeout(entry.timer)
+    entry.cleanup()
     this.pending.delete(call_id)
     entry.resolve(result)
   }
@@ -129,6 +138,7 @@ export class PluginConnection {
   dispose(): void {
     for (const [, entry] of this.pending) {
       clearTimeout(entry.timer)
+      entry.cleanup()
       entry.resolve({ ok: false, content: 'Окно SketchUp отключилось.' })
     }
     this.pending.clear()

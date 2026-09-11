@@ -83,17 +83,27 @@ module BACommunity
         register(dialog, 'undo') { |_id, _p| Runner.undo }
 
         register(dialog, 'screenshot') do |_id, p|
-          Screenshot.take(
+          if p['framing'] == 'viewport'
+            Screenshot.capture_current
+          else
+            Screenshot.take(
             view_name:    p['view'],
             zoom_extents: p['zoom_extents'] ? true : false,
             width:        (p['width']  || 1280).to_i,
             height:       (p['height'] || 800).to_i
-          )
+            )
+          end
         end
 
         register(dialog, 'save_history') do |_id, p|
           { saved: History.save(p['messages']) }
         end
+
+        register(dialog, 'cache_render') do |_id, p|
+          RenderAssets.store(p['id'], p['image'], p['source'])
+        end
+        register(dialog, 'get_render') { |_id, p| RenderAssets.read(p['id']) }
+        register(dialog, 'save_render') { |_id, p| RenderAssets.export(p['id']) }
 
         register(dialog, 'save_sessions') do |_id, p|
           History.save_sessions(p['sessions'])
