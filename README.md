@@ -36,11 +36,16 @@ Undo: не понравилось — Ctrl+Z.
   пишутся, свой пункт в Undo не заводит. Открыли файл через неделю —
   разговор на месте, и модель продолжит его с того же места, пока сервер
   помнит сессию.
+- **Постпродакшн текущего вида.** Выставили ракурс, попросили «сделай
+  визуализацию: вечерний свет, дерево и бетон» — после подтверждения кадр
+  вьюпорта уходит в генерацию изображений Codex и возвращается в чат
+  презентационным кадром с сохранённым ракурсом. Включается на gateway
+  (`RENDER_ENABLED=1`), см. [docs/POSTPRODUCTION.md](docs/POSTPRODUCTION.md).
 - **Много окон.** Каждое окно SketchUp — своё соединение с gateway, порты
   не нужны: соединение исходящее.
 
 Инструменты модели: `execute_ruby`, `get_scene`, `select`, `take_screenshot`,
-`undo`, `ask_user`. Подробно — [docs/PROTOCOL.md](docs/PROTOCOL.md).
+`render_viewport`, `undo`, `ask_user`. Подробно — [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 ## Статус
 
@@ -121,6 +126,7 @@ src/stultus/runner.rb     execute_ruby: одна операция, откат п
 src/stultus/scene.rb      снимок сцены
 src/stultus/selection.rb  наблюдатель выделения, описание, инструмент select
 src/stultus/screenshot.rb снимок вьюпорта
+src/stultus/render_assets.rb кадры постпродакшна на диске
 src/stultus/history.rb    переписка в файле модели
 src/stultus/settings.rb   адрес/пропуск в реестре SketchUp
 src/stultus/html/         index.html, app.js, app.css — окно
