@@ -127,6 +127,15 @@ export async function runChat(conn: PluginConnection, msg: Extract<PluginMessage
     console.log(`[ход ${msg.turn}] готово за ${Math.round((Date.now() - started) / 1000)} с`)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    if (controller.signal.aborted) {
+      // Остановка по кнопке: SDK после interrupt отдаёт ошибочный результат,
+      // но для человека это не ошибка, а его собственное решение.
+      console.log(`[ход ${msg.turn}] остановлен пользователем`)
+      // Сначала done (окно на нём очищает строку состояния), потом статус.
+      conn.send({ type: 'done' })
+      conn.send({ type: 'status', text: 'Остановлено. Сделанное осталось в модели, отменить — Ctrl+Z в SketchUp.' })
+      return
+    }
     console.error(`[ход ${msg.turn}] ошибка: ${message}`)
     conn.send({ type: 'error', message })
   } finally {
