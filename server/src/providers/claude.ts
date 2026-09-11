@@ -91,15 +91,8 @@ export async function* runClaude(conn: PluginConnection, input: RunInput): Async
           cache_creation_input_tokens?: number
         } | null
         const cached = used?.cache_read_input_tokens ?? 0
-        yield {
-          kind: 'usage',
-          usage: {
-            input: (used?.input_tokens ?? 0) + cached + (used?.cache_creation_input_tokens ?? 0),
-            output: used?.output_tokens ?? 0,
-            cached,
-            cost: 'total_cost_usd' in message ? message.total_cost_usd : undefined,
-          },
-        }
+        // Ошибка — до расхода: «usage» для вызывающего означает «ход окончен»,
+        // а после ошибки ход может повториться заново (сессия не найдена).
         if (message.subtype !== 'success') {
           const errors = 'errors' in message ? (message.errors as string[] | undefined) : undefined
           const text = errors?.length ? errors.join('; ') : message.subtype
@@ -108,6 +101,15 @@ export async function* runClaude(conn: PluginConnection, input: RunInput): Async
           } else if (!input.signal.aborted) {
             throw new Error(`Claude: ${text}`)
           }
+        }
+        yield {
+          kind: 'usage',
+          usage: {
+            input: (used?.input_tokens ?? 0) + cached + (used?.cache_creation_input_tokens ?? 0),
+            output: used?.output_tokens ?? 0,
+            cached,
+            cost: 'total_cost_usd' in message ? message.total_cost_usd : undefined,
+          },
         }
       }
     }
