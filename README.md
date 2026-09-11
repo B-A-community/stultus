@@ -112,7 +112,7 @@ src/stultus/settings.rb   адрес/пропуск в реестре SketchUp
 src/stultus/html/         index.html, app.js, app.css — окно
 server/                   gateway: src/{index,chat,mcp,connection,config,prompt}.ts, providers/{claude,codex}.ts
 server/deploy/            Dockerfile, docker-compose.yml, .env.example
-docs/                     ARCHITECTURE, PROTOCOL, DESIGN-BRIEF
+docs/                     ARCHITECTURE, PROTOCOL, DESIGN-BRIEF (ТЗ дизайнеру), UI-CONTRACT (верстальщику)
 tests/                    live_*.rb — прогоны на живом SketchUp через мост
 tools/build_rbz.ps1       сборка пакета
 ```
