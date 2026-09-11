@@ -14,13 +14,17 @@ require 'base64'
 module BACommunity
   module Stultus
     module Screenshot
+      # Направление «откуда смотрим» и вектор «верх» для стандартных видов.
+      # Камера ставится явно, а не через Sketchup.send_action('viewIso:'):
+      # send_action срабатывает на следующей итерации цикла событий, и снимок
+      # уходил со старой камеры.
       VIEWS = {
-        'iso'   => 'viewIso:',
-        'top'   => 'viewTop:',
-        'front' => 'viewFront:',
-        'right' => 'viewRight:',
-        'back'  => 'viewBack:',
-        'left'  => 'viewLeft:'
+        'iso'   => [Geom::Vector3d.new(1, -1, 1), Z_AXIS],
+        'top'   => [Geom::Vector3d.new(0, 0, 1),  Y_AXIS],
+        'front' => [Geom::Vector3d.new(0, -1, 0), Z_AXIS],
+        'right' => [Geom::Vector3d.new(1, 0, 0),  Z_AXIS],
+        'back'  => [Geom::Vector3d.new(0, 1, 0),  Z_AXIS],
+        'left'  => [Geom::Vector3d.new(-1, 0, 0), Z_AXIS]
       }.freeze
 
       module_function
@@ -32,11 +36,13 @@ module BACommunity
         saved = snapshot_camera(view)
 
         if VIEWS.key?(view_name.to_s)
-          Sketchup.send_action(VIEWS[view_name.to_s])
+          set_view(model, view, *VIEWS[view_name.to_s])
+          # После смены ракурса кадрируем всегда: старая дистанция камеры к
+          # новому направлению не относится.
+          view.zoom_extents
+        elsif zoom_extents
+          view.zoom_extents
         end
-        view.zoom_extents if zoom_extents
-        # send_action и zoom применяются на следующей итерации цикла событий;
-        # даём им пройти, иначе снимок будет со старой камеры.
         view.invalidate
         wait_a_tick
 
@@ -57,6 +63,19 @@ module BACommunity
         { ok: false, error: "#{e.class}: #{e.message}" }
       ensure
         restore_camera(view, saved) if saved && (VIEWS.key?(view_name.to_s) || zoom_extents)
+      end
+
+      # Ставит камеру на центр габарита модели с заданного направления.
+      def set_view(model, view, direction, up)
+        bb = model.bounds
+        center = bb.valid? ? bb.center : ORIGIN
+        distance = bb.valid? && bb.diagonal > 0 ? bb.diagonal * 2 : 10_000.mm
+        dir = direction.clone
+        dir.length = distance
+        eye = center.offset(dir)
+        cam = view.camera
+        cam.set(eye, center, up)
+        view.camera = cam
       end
 
       def snapshot_camera(view)

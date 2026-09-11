@@ -90,8 +90,13 @@ curl http://localhost:8790/health
   (auth.json ляжет в том `/opt/stultus/codex`).
 
 Без Docker: `cd server && npm ci && npm run build && PLUGIN_TOKEN=… node dist/index.js`
-(Node ≥ 22.12). Для разработки `npm run dev`; локальный вход Claude без
-токена — `CLAUDE_ASSUME_LOGGED_IN=1`.
+(Node ≥ 22.12). Для разработки `npm run dev`.
+
+Важно про Claude: встроенный в SDK бинарник Claude Code хранит вход отдельно
+от установленного `claude`. Без токена в `.env` он отвечает «Not logged in»,
+даже если на машине выполнен `claude login`. Обходы для разработки:
+`CLAUDE_ASSUME_LOGGED_IN=1` (считать настроенным) и `CLAUDE_CODE_PATH`
+(путь к своему исполняемому Claude Code).
 
 ## Структура
 
