@@ -71,7 +71,7 @@ SketchUp + плагин (Ruby)  ──HtmlDialog──  окно чата (JS)
 ```
 
 Gateway принимает окна SketchUp и для каждого поднимает MCP-сервер `stultus`
-с пятью инструментами; Claude и Codex ходят к нему как к обычному MCP.
+с семью инструментами; Claude и Codex ходят к нему как к обычному MCP.
 Вызов инструмента уезжает в окно по WebSocket, окно зовёт Ruby, ответ
 возвращается модели. Архитектура — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -132,7 +132,7 @@ src/stultus/settings.rb   адрес/пропуск в реестре SketchUp
 src/stultus/html/         index.html, app.js, app.css — окно
 server/                   gateway: src/{index,chat,mcp,connection,config,prompt}.ts, providers/{claude,codex}.ts
 server/deploy/            Dockerfile, docker-compose.yml, .env.example
-docs/                     ARCHITECTURE, PROTOCOL, AGENT-GUIDE (гайд для агента), DESIGN-BRIEF, UI-CONTRACT
+docs/                     ARCHITECTURE, PROTOCOL, POSTPRODUCTION, AGENT-GUIDE, DESIGN-BRIEF, UI-CONTRACT
 tests/                    live_*.rb — прогоны на живом SketchUp через мост
 tools/build_rbz.ps1       сборка пакета
 ```
