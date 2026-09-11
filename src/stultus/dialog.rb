@@ -48,19 +48,32 @@ module BACommunity
         dialog.set_file(File.join(PLUGIN_PATH, 'html', 'index.html'))
         # Обработчик закрытия срабатывает с опозданием: если окно закрыли и
         # тут же открыли новое, старый обработчик обнулял ссылку уже на новое.
-        dialog.set_on_closed { @dialog = nil if @dialog.equal?(dialog) }
+        dialog.set_on_closed do
+          if @dialog.equal?(dialog)
+            @dialog = nil
+            Selection.detach
+          end
+        end
 
         register(dialog, 'ready') do |_id, _payload|
+          watch_selection(dialog)
           {
-            settings: Settings.all,
-            history:  History.load,
-            sessions: History.sessions,
-            instance: instance_info,
-            scene:    Scene.snapshot
+            settings:  Settings.all,
+            history:   History.load,
+            sessions:  History.sessions,
+            instance:  instance_info,
+            selection: Selection.summary
           }
         end
 
-        register(dialog, 'scene_state') { |_id, _p| Scene.snapshot }
+        register(dialog, 'scene_state') do |_id, p|
+          watch_selection(dialog)
+          Scene.snapshot(full: p.key?('full') ? p['full'] ? true : false : true)
+        end
+
+        register(dialog, 'select') do |_id, p|
+          Selection.select(p['ids'], mode: (p['mode'] || 'replace').to_s, zoom: p['zoom'] ? true : false)
+        end
 
         register(dialog, 'execute_ruby') do |_id, p|
           Runner.execute(p['code'], label: p['label'])
@@ -101,6 +114,22 @@ module BACommunity
         end
 
         dialog
+      end
+
+      # Наблюдатель выделения живёт, пока открыто окно; при смене модели
+      # (другой файл в этом же окне) перевешивается.
+      def watch_selection(dialog)
+        model = Sketchup.active_model
+        return if Selection.attached_to?(model)
+        Selection.attach { push_selection(dialog) }
+      end
+
+      def push_selection(dialog)
+        return unless @dialog.equal?(dialog) && dialog.visible?
+        script = "window.Stultus && window.Stultus.selection(#{JSON.generate(Selection.summary)});"
+        dialog.execute_script(script)
+      rescue StandardError
+        nil
       end
 
       # Обёртка над add_action_callback: разбирает JSON, зовёт обработчик,

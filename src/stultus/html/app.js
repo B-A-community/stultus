@@ -40,6 +40,16 @@
       if (!p) return;
       delete pendingRuby[msg.id];
       p.resolve(msg.result);
+    },
+    // Ruby пушит сюда выделение при каждом его изменении в SketchUp.
+    selection: function (sel) {
+      state.selection = sel || null;
+      renderContext();
+    },
+    // Текст для строки контекста в композере; его же берёт ui.js.
+    contextText: function (sceneOn) {
+      var sel = state.selection && state.selection.text ? state.selection.text : 'ничего не выделено';
+      return (sceneOn ? 'Контекст сцены' : 'Без контекста') + ' · ' + sel;
     }
   };
 
@@ -57,7 +67,8 @@
     reconnectTimer: null,
     reconnectDelay: 1000,
     current: null,     // текущий ответ: {el, bodyEl, text, tools:[]}
-    usage: null
+    usage: null,
+    selection: null    // { count, text, by_type, definitions } — живое выделение из SketchUp
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -130,6 +141,7 @@
     if (call.name === 'execute_ruby') return a.label || (String(a.code || '').split('\n')[0].slice(0, 80));
     if (call.name === 'take_screenshot') return a.reason || '';
     if (call.name === 'ask_user') return a.question || '';
+    if (call.name === 'select') return a.mode === 'clear' ? 'снять выделение' : 'выделить ' + ((a.ids || []).length) + ' объект(ов)';
     return '';
   }
 
@@ -161,6 +173,11 @@
 
   function hint(text) { $('composerHint').textContent = text || ''; }
 
+  function renderContext() {
+    var el = $('contextLabel');
+    if (el) el.textContent = window.Stultus.contextText($('attachScene').checked);
+  }
+
   // ---------- История -----------------------------------------------------
   function restoreHistory(messages) {
     chat.querySelectorAll('.msg, .tool, .card').forEach(function (n) { n.remove(); });
@@ -173,7 +190,8 @@
           el.querySelector('.tool__args').textContent = '';
           finishTool(el, t.ok !== false, '');
         });
-        addMessage('assistant', m.text, { provider: m.provider });
+        // Ход без текста (только вызовы) — пузыря не было и при живом ходе.
+        if (m.text) addMessage('assistant', m.text, { provider: m.provider });
       }
     });
     if (state.messages.length) hideEmpty();
@@ -319,12 +337,13 @@
     state.turn += 1;
     startCurrent(provider);
 
-    var attach = $('attachScene').checked;
+    // Выделение уходит всегда: это то, о чём пользователь говорит «это».
+    // Галочка решает только, класть ли полный снимок сцены.
+    var full = $('attachScene').checked;
     var go = function (scene) {
       send({ type: 'chat', turn: state.turn, text: text, provider: provider, model: model, scene: scene || null, sessions: state.sessions });
     };
-    if (attach) rb('scene_state').then(go, function () { go(null); });
-    else go(null);
+    rb('scene_state', { full: full }).then(go, function () { go(null); });
   }
 
   // Текущий ход модели. Текст идёт пузырями: каждый вызов инструмента
@@ -423,7 +442,8 @@
     var el = addTool(msg);
     var run;
     if (msg.name === 'execute_ruby') run = rb('execute_ruby', { code: msg.args.code, label: msg.args.label });
-    else if (msg.name === 'get_scene') run = rb('scene_state');
+    else if (msg.name === 'get_scene') run = rb('scene_state', { full: true });
+    else if (msg.name === 'select') run = rb('select', msg.args || {});
     else if (msg.name === 'undo') run = rb('undo');
     else run = Promise.reject(new Error('Неизвестный инструмент: ' + msg.name));
 
@@ -546,7 +566,7 @@
   };
   $('providerSelect').onchange = function () { fillModels(); saveChoice(); };
   $('modelSelect').onchange = saveChoice;
-  $('attachScene').onchange = saveChoice;
+  $('attachScene').onchange = function () { saveChoice(); renderContext(); };
 
   // ---------- Старт -------------------------------------------------------
   function boot() {
@@ -556,6 +576,8 @@
       state.sessions = r.sessions || {};
       $('modelTitle').textContent = state.instance ? state.instance.model_title : '';
       $('attachScene').checked = state.settings.attach_scene !== false;
+      state.selection = r.selection || null;
+      renderContext();
       restoreHistory(r.history || []);
       if (!state.settings.gateway) openSettings();
       connect();

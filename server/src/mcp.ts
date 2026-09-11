@@ -18,7 +18,7 @@ import type { PluginConnection } from './connection.ts'
 export const MCP_SERVER_NAME = 'stultus'
 
 /** Что модель называет в описаниях — единый источник для обоих провайдеров. */
-export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'take_screenshot', 'undo', 'ask_user'] as const
+export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'undo', 'ask_user'] as const
 
 function build(conn: PluginConnection): McpServer {
   const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.1.0' })
@@ -48,14 +48,36 @@ function build(conn: PluginConnection): McpServer {
     {
       title: 'Снимок сцены',
       description:
-        'Краткое состояние открытой модели: единицы, выделение, объекты верхнего уровня (id, тип, имя, ' +
-        'слой, материал, габариты в мм), слои, материалы, камера, режим редактирования группы. ' +
-        'Список объектов ограничен; глубже — через execute_ruby.',
+        'Краткое состояние открытой модели: единицы, ТЕКУЩЕЕ ВЫДЕЛЕНИЕ пользователя (подробно: для ' +
+        'экземпляров компонентов — сколько всего экземпляров у определения, для граней — площадь, нормаль, ' +
+        'хозяин), объекты верхнего уровня (id, тип, имя, слой, материал, габариты в мм), слои, материалы, ' +
+        'камера, режим редактирования группы. Список объектов ограничен; глубже — через execute_ruby.',
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
     async () => {
       const r = await conn.callTool('get_scene', {})
+      return { content: [{ type: 'text', text: r.content }], isError: !r.ok }
+    },
+  )
+
+  server.registerTool(
+    'select',
+    {
+      title: 'Выделить объекты',
+      description:
+        'Меняет выделение в SketchUp: выделяет объекты по их id (из get_scene или execute_ruby), ' +
+        'добавляет к текущему или снимает выделение. С zoom камера наводится на выделенное. ' +
+        'Используй, чтобы показать пользователю результат или спросить «вы имели в виду вот эти?». ' +
+        'Выделить можно только объекты текущего контекста редактирования.',
+      inputSchema: {
+        ids: z.array(z.number().int()).max(500).optional().describe('entityID объектов'),
+        mode: z.enum(['replace', 'add', 'clear']).optional().describe('replace (по умолчанию), add, clear'),
+        zoom: z.boolean().optional().describe('Навести камеру на выделенное'),
+      },
+    },
+    async ({ ids, mode, zoom }) => {
+      const r = await conn.callTool('select', { ids: ids ?? [], mode: mode ?? 'replace', zoom: zoom ?? false })
       return { content: [{ type: 'text', text: r.content }], isError: !r.ok }
     },
   )

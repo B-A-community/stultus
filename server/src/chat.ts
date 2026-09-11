@@ -33,16 +33,40 @@ export function providerList(): ProviderInfo[] {
   }))
 }
 
-/** Сообщение пользователя вместе со снимком сцены — то, что уходит модели. */
+/**
+ * Сообщение пользователя вместе со снимком сцены — то, что уходит модели.
+ *
+ * Выделение идёт первым и отдельной строкой: это то, о чём человек говорит
+ * «это», и модель должна увидеть его раньше списка объектов.
+ */
 function buildPrompt(text: string, scene: unknown): string {
-  if (!scene) return text
+  if (!scene || typeof scene !== 'object') return text
+  const snap = scene as {
+    selection_summary?: { count?: number; text?: string; definitions?: Array<{ name: string; selected: number; total: number }> }
+    selection?: unknown[]
+  }
+  const parts = [text]
+  const summary = snap.selection_summary
+  if (summary) {
+    const lines = [`[Выделение пользователя в SketchUp: ${summary.text ?? 'ничего не выделено'}]`]
+    for (const d of summary.definitions ?? []) {
+      if (d.total > d.selected) {
+        lines.push(
+          `Внимание: выделено ${d.selected} из ${d.total} экземпляров компонента «${d.name}». ` +
+            'Правка определения затронет все экземпляры — перед правкой сделай выделенным make_unique.',
+        )
+      }
+    }
+    parts.push(lines.join('\n'))
+  }
   let json: string
   try {
     json = JSON.stringify(scene)
   } catch {
-    return text
+    return parts.join('\n\n')
   }
-  return `${text}\n\n[Снимок сцены SketchUp на момент сообщения]\n\`\`\`json\n${json}\n\`\`\``
+  parts.push('[Снимок сцены SketchUp на момент сообщения]\n```json\n' + json + '\n```')
+  return parts.join('\n\n')
 }
 
 /** Один ход: запустить провайдера и переслать поток в плагин. */
