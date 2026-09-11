@@ -366,6 +366,10 @@
   function appendText(delta) {
     if (!state.current) startCurrent($('providerSelect').value);
     ensureBubble();
+    // Разделитель абзацев от провайдера в начале нового пузыря — пустые
+    // строки сверху; пузырь начинается с текста.
+    if (!state.current.text) delta = delta.replace(/^\s+/, '');
+    if (!delta) return;
     state.current.text += delta;
     state.current.body.innerHTML = renderMarkdown(state.current.text);
     scrollDown();
