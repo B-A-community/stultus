@@ -67,22 +67,24 @@ export async function runChat(conn: PluginConnection, msg: Extract<PluginMessage
   conn.send({ type: 'turn_start', turn: msg.turn })
 
   const model = msg.model && provider.models.includes(msg.model) ? msg.model : provider.default
-  const resume = conn.sessions[msg.provider]
+  const prompt = buildPrompt(msg.text, msg.scene)
   const started = Date.now()
-  console.log(`[ход ${msg.turn}] ${conn.instance.model_title ?? '?'} → ${provider.label} ${model}${resume ? ' (продолжение)' : ''}`)
 
-  try {
-    for await (const piece of provider.run(conn, {
-      prompt: buildPrompt(msg.text, msg.scene),
-      model,
-      resume,
-      signal: controller.signal,
-    })) {
+  /**
+   * Один запуск провайдера. Возвращает, успел ли он что-то отдать: по этому
+   * решается, можно ли повторить ход без продолжения сессии.
+   */
+  const attempt = async (resume: string | undefined): Promise<boolean> => {
+    let produced = false
+    console.log(`[ход ${msg.turn}] ${conn.instance.model_title ?? '?'} → ${provider.label} ${model}${resume ? ' (продолжение)' : ''}`)
+    for await (const piece of provider.run(conn, { prompt, model, resume, signal: controller.signal })) {
       switch (piece.kind) {
         case 'text':
+          produced = true
           conn.send({ type: 'text', delta: piece.text })
           break
         case 'text_replace':
+          produced = true
           conn.send({ type: 'text_replace', text: piece.text })
           break
         case 'status':
@@ -93,10 +95,30 @@ export async function runChat(conn: PluginConnection, msg: Extract<PluginMessage
           conn.send({ type: 'session', provider: msg.provider, id: piece.id })
           break
         case 'usage':
+          produced = true
           conn.send({ type: 'done', usage: piece.usage })
           conn.running = null
           break
       }
+    }
+    return produced
+  }
+
+  try {
+    const resume = conn.sessions[msg.provider]
+    try {
+      await attempt(resume)
+    } catch (error) {
+      // Сессия из файла модели могла остаться от другого gateway (переезд с
+      // домашней виртуалки на офисную, переустановка) — тогда провайдер её
+      // не находит. Это не повод ронять ход: начинаем разговор заново и
+      // говорим об этом пользователю.
+      if (!resume || controller.signal.aborted) throw error
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn(`[ход ${msg.turn}] продолжить сессию не удалось (${message}); начинаю заново`)
+      delete conn.sessions[msg.provider]
+      conn.send({ type: 'status', text: 'Прежняя сессия на сервере не найдена — начинаю разговор заново.' })
+      await attempt(undefined)
     }
     if (conn.running) {
       // Провайдер закончил без расхода — прерван или оборван. Ход всё равно закрыт.
