@@ -35,11 +35,10 @@ module BACommunity
       command.tooltip = "#{PLUGIN_NAME} — чат с ИИ"
       command.status_bar_text = 'Открыть окно чата с нейросетью'
       command.menu_text = PLUGIN_NAME
-      icon = Icons.path('stultus')
-      if icon
-        command.small_icon = icon
-        command.large_icon = icon
-      end
+      small = Icons.path('stultus-24')
+      large = Icons.path('stultus-32')
+      command.small_icon = small if small
+      command.large_icon = large || small if large || small
       toolbar.add_item(command)
       toolbar.restore
     end
@@ -47,11 +46,11 @@ module BACommunity
     module Icons
       module_function
 
-      # Иконка — PNG рядом с кодом; если её нет, SketchUp покажет кнопку без
-      # картинки, а не упадёт.
+      # Иконки — PNG из дизайна Graphite (16/24/32, прозрачный фон); если
+      # файла нет, SketchUp покажет кнопку без картинки, а не упадёт.
       def path(name)
         dir = File.join(PLUGIN_PATH, 'icons')
-        %w[svg png].each do |ext|
+        %w[png svg].each do |ext|
           file = File.join(dir, "#{name}.#{ext}")
           return file if File.exist?(file)
         end
