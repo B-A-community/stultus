@@ -90,7 +90,12 @@ curl http://localhost:8790/health
   (auth.json ляжет в том `/opt/stultus/codex`).
 
 Без Docker: `cd server && npm ci && npm run build && PLUGIN_TOKEN=… node dist/index.js`
-(Node ≥ 22.12). Для разработки `npm run dev`.
+(Node ≥ 22.12). Для разработки `npm run dev`. На домашней виртуалке
+(`hedonism-backend`, 192.168.10.94) gateway стоит именно так: код в
+`/opt/stultus/app`, настройки в `/opt/stultus/.env`, сервис systemd
+`stultus-gateway` от пользователя, у которого выполнен `claude login`, —
+тогда токен Claude в `.env` не нужен. Обновление:
+`cd /opt/stultus/app && git pull && cd server && npm ci && npm run build && sudo systemctl restart stultus-gateway`.
 
 Важно про Claude: встроенный в SDK бинарник Claude Code хранит вход отдельно
 от установленного `claude`. Без токена в `.env` он отвечает «Not logged in»,
@@ -126,8 +131,9 @@ tools/build_rbz.ps1       сборка пакета
 ## Грабли
 
 - **Codex отклонял execute_ruby.** При `approvalPolicy: never` Codex молча
-  блокирует MCP-инструменты без пометки «только чтение». Лечится
-  `default_tools_approval_mode = "auto"` у сервера в его конфиге.
+  отклоняет MCP-инструменты без пометки «только чтение» («requires
+  approval»). Лечится `default_tools_approval_mode = "approve"` у сервера
+  в его конфиге; `auto` не помогает.
 - **`load` по мосту возвращает `true`**, а не значение скрипта — тесты пишут
   отчёт в файл.
 - **Ruby в SketchUp однопоточный.** Сеть — в JS окна; Ruby только исполняет
