@@ -44,13 +44,16 @@ function build(conn: PluginConnection): McpServer {
       signal.throwIfAborted()
       if (shot.capture?.framing !== 'viewport') throw new Error('Обновите плагин: снимок должен сохранять кадрирование вьюпорта.')
       const source = pngImage(shot.image.base64)
+      // Пользователь мог поправить задание в карточке — генерируем по его тексту.
+      const finalPrompt = (shot.prompt ?? '').trim().slice(0, 6000) || prompt
+      const edited = finalPrompt !== prompt
       conn.send({ type: 'render_status', id, text: 'Создаю визуализацию. Это может занять несколько минут…' })
-      const image = await renderViewport(source, prompt, signal)
+      const image = await renderViewport(source, finalPrompt, signal)
       signal.throwIfAborted()
-      conn.send({ type: 'render_result', id, prompt, source, image })
+      conn.send({ type: 'render_result', id, prompt: finalPrompt, source, image })
       const changedRatio = Math.abs(image.width / image.height / (source.width / source.height) - 1) > 0.02
       return { content: [
-        { type: 'text' as const, text: `Постпродакшн-кадр ${image.width}×${image.height} показан пользователю. Исходник ${source.width}×${source.height}. Геометрия SketchUp не менялась. Это ИИ-визуализация: сравни её с исходником, не обещай точность геометрии.` + (changedRatio ? ' Формат результата отличается от исходного — сообщи пользователю.' : '') },
+        { type: 'text' as const, text: `Постпродакшн-кадр ${image.width}×${image.height} показан пользователю. Исходник ${source.width}×${source.height}. Геометрия SketchUp не менялась. Это ИИ-визуализация: сравни её с исходником, не обещай точность геометрии.` + (changedRatio ? ' Формат результата отличается от исходного — сообщи пользователю.' : '') + (edited ? ` Пользователь изменил задание, генерация шла по его тексту: «${finalPrompt}».` : '') },
         { type: 'image' as const, data: image.base64, mimeType: image.mime },
       ] }
     } catch (error) {

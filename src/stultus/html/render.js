@@ -14,13 +14,40 @@ window.StultusRender = function (api) {
     var card = document.getElementById('tplShot').content.firstElementChild.cloneNode(true);
     card.classList.add('card--render');
     card.querySelector('.card__title').textContent = 'Создать визуализацию этого вида?';
-    card.querySelector('.card__text').textContent = msg.args.prompt + '\n\nТекущий кадр будет передан генератору Codex. Используются лимиты вашей подписки. Камера и модель останутся прежними.';
+    var NOTE = 'Текущий кадр будет передан генератору Codex. Используются лимиты вашей подписки. Камера и модель останутся прежними.';
+    var text = card.querySelector('.card__text');
+    text.textContent = msg.args.prompt + '\n\n' + NOTE;
     var allow = card.querySelector('[data-act=allow]'), deny = card.querySelector('[data-act=deny]');
     allow.textContent = 'Зафиксировать и создать ↗'; deny.textContent = 'Отмена';
+    // «Изменить» — между «создать» и «отмена»: задание открывается в поле
+    // ввода прямо в карточке, и на генерацию уходит то, что написал человек.
+    var edit = element('button', 'btn', 'Изменить');
+    edit.setAttribute('data-act', 'edit');
+    allow.insertAdjacentElement('afterend', edit);
+    var editor = null;
+    edit.onclick = function () {
+      if (jobs[id] !== job || editor) return;
+      editor = element('textarea', 'card__editor');
+      editor.value = msg.args.prompt;
+      editor.rows = 6;
+      editor.setAttribute('aria-label', 'Задание для визуализации');
+      text.textContent = NOTE;
+      text.insertAdjacentElement('beforebegin', editor);
+      edit.hidden = true;
+      editor.focus();
+      api.scroll();
+    };
     var job = jobs[id] = { card: card, record: record, source: null };
+    function chosenPrompt() {
+      var v = editor ? editor.value.trim() : '';
+      return v || msg.args.prompt;
+    }
     allow.onclick = function () {
       if (jobs[id] !== job) return;
-      allow.disabled = deny.disabled = true;
+      var prompt = chosenPrompt();
+      allow.disabled = deny.disabled = edit.disabled = true;
+      if (editor) { editor.remove(); editor = null; }
+      edit.hidden = true;
       card.querySelector('.card__text').textContent = 'Фиксирую текущий кадр…';
       api.rb('screenshot', { framing: 'viewport' }).then(function (r) {
         if (jobs[id] !== job) return;
@@ -30,7 +57,10 @@ window.StultusRender = function (api) {
         card.classList.add('is-done');
         card.querySelector('.card__title').textContent = 'Кадр зафиксирован';
         card.querySelector('.card__text').textContent = r.width + ' × ' + r.height + ' · создаю визуализацию…';
-        api.send({ type: 'tool_result', call_id: msg.call_id, ok: true, content: 'Точный кадр вьюпорта разрешён для постпродакшна.', image: { mime: r.mime, base64: r.base64 }, capture: { framing: r.framing, width: r.width, height: r.height } });
+        var edited = prompt !== msg.args.prompt;
+        api.send({ type: 'tool_result', call_id: msg.call_id, ok: true,
+          content: edited ? 'Точный кадр вьюпорта разрешён для постпродакшна. Пользователь изменил задание, в генерацию уходит его текст.' : 'Точный кадр вьюпорта разрешён для постпродакшна.',
+          image: { mime: r.mime, base64: r.base64 }, capture: { framing: r.framing, width: r.width, height: r.height }, prompt: prompt });
         api.scroll();
       }).catch(function (error) {
         if (jobs[id] !== job) return;
@@ -40,6 +70,7 @@ window.StultusRender = function (api) {
     };
     deny.onclick = function () {
       if (jobs[id] !== job) return;
+      if (editor) { editor.remove(); editor = null; }
       record.ok = false; card.classList.add('is-done'); card.querySelector('.card__text').textContent = 'Создание визуализации отменено.'; delete jobs[id];
       api.send({ type: 'tool_result', call_id: msg.call_id, ok: false, content: 'Пользователь отменил визуализацию. Ничего не генерируй.' });
     };

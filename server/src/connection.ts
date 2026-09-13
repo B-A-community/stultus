@@ -19,6 +19,8 @@ export interface ToolResult {
   content: string
   image?: { mime: string; base64: string }
   capture?: { framing: string; width: number; height: number }
+  /** Текст задания, если пользователь отредактировал его в карточке. */
+  prompt?: string
 }
 
 /** Сообщения плагин → gateway. */
@@ -33,7 +35,7 @@ export type PluginMessage =
       scene?: unknown
       sessions?: Record<string, string>
     }
-  | { type: 'tool_result'; call_id: string; ok: boolean; content?: string; image?: { mime: string; base64: string }; capture?: ToolResult['capture'] }
+  | { type: 'tool_result'; call_id: string; ok: boolean; content?: string; image?: { mime: string; base64: string }; capture?: ToolResult['capture']; prompt?: string }
   | { type: 'cancel' }
 
 /** Сообщения gateway → плагин. */
