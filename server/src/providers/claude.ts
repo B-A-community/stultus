@@ -38,6 +38,9 @@ export async function* runClaude(conn: PluginConnection, input: RunInput): Async
     options: {
       model: input.model,
       systemPrompt: SYSTEM_PROMPT,
+      // Сводка размышлений — в ленту окна: по умолчанию текст размышлений
+      // не возвращается вовсе (display omitted), и строка «думает…» пуста.
+      thinking: { type: 'adaptive', display: 'summarized' },
       mcpServers: {
         [MCP_SERVER_NAME]: {
           type: 'http',
