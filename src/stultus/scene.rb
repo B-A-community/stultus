@@ -41,6 +41,8 @@ module BACommunity
           context: m.active_path ? m.active_path.map { |e| describe_short(e) } : nil,
           selection_summary: Selection.summary,
           selection: sel.first(limit).map { |e| describe(e, detailed: true) },
+          # Какие рендереры есть в этом SketchUp — модели, чтобы знать про render_vray.
+          renderers: Dialog.renderers,
           plugin:  VERSION
         }
         return snap unless full
