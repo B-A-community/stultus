@@ -65,7 +65,7 @@ SketchUp. Переписка привязана к файлу модели и в
 header.topbar
   .topbar__title   → .topbar__name «Stultus», .topbar__model (#modelTitle — имя файла модели)
   .topbar__status  (#connStatus) → .dot + .topbar__statusText
-  .topbar__actions → button.iconbtn#btnNew, button.iconbtn#btnSettings
+  .topbar__actions → button.iconbtn#btnNew (удалить историю → архив), button.iconbtn#btnRestore (восстановить, disabled без архива), button.iconbtn#btnSettings
 
 section.provider
   label.provider__field → select#providerSelect   (Claude / Codex; ненастроенные — disabled)

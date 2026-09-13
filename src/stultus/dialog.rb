@@ -63,7 +63,8 @@ module BACommunity
             history:   History.load,
             sessions:  History.sessions,
             instance:  instance_info,
-            selection: Selection.summary
+            selection: Selection.summary,
+            archive:   History.archive_info
           }
         end
 
@@ -111,8 +112,11 @@ module BACommunity
         end
 
         register(dialog, 'clear_history') do |_id, _p|
-          History.clear
-          { ok: true }
+          History.clear.merge(archive: History.archive_info)
+        end
+
+        register(dialog, 'restore_history') do |_id, _p|
+          History.restore.merge(archive: History.archive_info)
         end
 
         register(dialog, 'save_settings') do |_id, p|

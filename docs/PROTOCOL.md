@@ -22,7 +22,7 @@ JS зовёт `sketchup.<имя>(id, json)`, Ruby отвечает
 
 | Вызов | Аргументы | Ответ |
 |---|---|---|
-| `ready` | — | `{ settings, history, sessions, instance, scene }` |
+| `ready` | — | `{ settings, history, sessions, instance, selection, archive }` |
 | `scene_state` | `{ full? }` | снимок сцены (см. ниже); `full: false` — только единицы, контекст и выделение |
 | `select` | `{ ids[], mode?, zoom? }` | `{ selected, text, missing_ids?, outside_context_ids? }` |
 | `execute_ruby` | `{ code, label? }` | `{ ok, result, output }` или `{ ok: false, error, backtrace[], output }` |
@@ -30,7 +30,8 @@ JS зовёт `sketchup.<имя>(id, json)`, Ruby отвечает
 | `screenshot` | `{ view?, zoom_extents?, width?, height? }` | `{ ok, mime, base64, width, height, bytes }` |
 | `save_history` | `{ messages[] }` | `{ saved }` — сколько сообщений влезло под лимит |
 | `save_sessions` | `{ sessions: { claude?, codex? } }` | `{ ok }` |
-| `clear_history` | — | `{ ok }` |
+| `clear_history` | — | `{ archived, archive }` — переписка и сессии уходят в архив (ключ `archive` словаря), лента пустеет |
+| `restore_history` | — | `{ restored, messages[], sessions, archive }` — архив встаёт перед текущей перепиской |
 | `save_settings` | `{ settings }` | `{ settings }` — полный набор после записи |
 | `open_url` | `{ url }` | `{ ok }` |
 

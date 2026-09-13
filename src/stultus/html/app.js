@@ -77,7 +77,8 @@
     reconnectDelay: 1000,
     current: null,     // текущий ответ: {el, bodyEl, text, tools:[]}
     usage: null,
-    selection: null    // { count, text, by_type, definitions } — живое выделение из SketchUp
+    selection: null,   // { count, text, by_type, definitions } — живое выделение из SketchUp
+    archive: null      // { count, at } — удалённая переписка, которую можно вернуть
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -615,15 +616,39 @@
   $('btnSettings').onclick = openSettings;
   $('btnCloseSettings').onclick = function () { $('settings').hidden = true; };
   $('btnSaveSettings').onclick = saveSettings;
-  $('btnClearHistory').onclick = function () {
-    if (!confirm('Стереть переписку из этой модели? Сессии провайдеров тоже сбросятся.')) return;
-    rb('clear_history').then(function () { state.sessions = {}; restoreHistory([]); $('chatEmpty').hidden = false; $('settings').hidden = true; });
-  };
-  $('btnNew').onclick = function () {
+  // «Удалить историю» убирает переписку в архив внутри файла модели,
+  // «Восстановить» возвращает её. Модель после удаления начинает с чистого
+  // листа (сессии тоже в архиве), после восстановления — продолжает.
+  function setArchive(info) {
+    state.archive = info || null;
+    var b = $('btnRestore');
+    if (!b) return;
+    b.disabled = !state.archive;
+    b.title = state.archive ? 'Восстановить удалённую историю (' + state.archive.count + ' сообщ.)' : 'Восстановить историю — архив пуст';
+  }
+  function clearHistory() {
     if (state.busy) return;
-    if (!confirm('Начать новый разговор? Текущая переписка в модели будет очищена.')) return;
-    rb('clear_history').then(function () { state.sessions = {}; restoreHistory([]); $('chatEmpty').hidden = false; $('usage').textContent = ''; });
-  };
+    rb('clear_history').then(function (r) {
+      state.sessions = {}; restoreHistory([]); $('chatEmpty').hidden = false; $('usage').textContent = '';
+      $('settings').hidden = true;
+      setArchive(r && r.archive);
+      hint(r && r.archived ? 'История убрана в архив: ' + r.archived + ' сообщ. Кнопка ↺ вернёт её.' : '');
+    });
+  }
+  function restoreArchive() {
+    if (state.busy || !state.archive) return;
+    rb('restore_history').then(function (r) {
+      if (!r || r.ok === false) { hint('Не удалось восстановить: ' + (r && r.error)); return; }
+      state.sessions = r.sessions || {};
+      restoreHistory(r.messages || []);
+      if (!(r.messages || []).length) $('chatEmpty').hidden = false;
+      setArchive(r.archive);
+      hint(r.restored ? 'Восстановлено сообщений: ' + r.restored : '');
+    });
+  }
+  $('btnClearHistory').onclick = clearHistory;
+  $('btnNew').onclick = clearHistory;
+  $('btnRestore').onclick = restoreArchive;
   $('providerSelect').onchange = function () { fillModels(); saveChoice(); };
   $('modelSelect').onchange = saveChoice;
   $('attachScene').onchange = function () { saveChoice(); renderContext(); };
@@ -638,6 +663,7 @@
       $('attachScene').checked = state.settings.attach_scene !== false;
       state.selection = r.selection || null;
       renderContext();
+      setArchive(r.archive);
       restoreHistory(r.history || []);
       if (!state.settings.gateway) openSettings();
       connect();

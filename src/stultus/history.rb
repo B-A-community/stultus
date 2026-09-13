@@ -16,12 +16,14 @@
 #     переписка» пользователь видеть не должен.
 
 require 'json'
+require 'time'
 
 module BACommunity
   module Stultus
     module History
       KEY_HISTORY  = 'history'
       KEY_SESSIONS = 'sessions'
+      KEY_ARCHIVE  = 'archive'
       KEY_VERSION  = 'version'
 
       module_function
@@ -54,9 +56,46 @@ module BACommunity
         messages.length
       end
 
+      # «Удалить историю»: переписка и сессии не стираются, а уезжают в архив
+      # (один слот — последняя удалённая переписка). Лента пустеет, а
+      # «Восстановить» возвращает всё как было.
       def clear
+        messages = load
+        sess = sessions
+        unless messages.empty? && sess.empty?
+          write(KEY_ARCHIVE, JSON.generate({ 'messages' => messages, 'sessions' => sess, 'at' => Time.now.utc.iso8601 }))
+        end
         write(KEY_HISTORY, '[]')
         write(KEY_SESSIONS, '{}')
+        { archived: messages.length }
+      end
+
+      def archive_info
+        raw = read(KEY_ARCHIVE)
+        return nil if raw.nil? || raw.empty?
+        a = JSON.parse(raw)
+        return nil unless a.is_a?(Hash) && a['messages'].is_a?(Array) && !a['messages'].empty?
+        { count: a['messages'].length, at: a['at'] }
+      rescue JSON::ParserError
+        nil
+      end
+
+      # «Восстановить историю»: архив встаёт перед текущей перепиской; сессии
+      # берутся из архива, если новых ещё нет. Архив после этого пуст.
+      def restore
+        raw = read(KEY_ARCHIVE)
+        return { restored: 0, messages: load, sessions: sessions } if raw.nil? || raw.empty?
+        a = JSON.parse(raw)
+        archived = a.is_a?(Hash) && a['messages'].is_a?(Array) ? a['messages'] : []
+        merged = archived + load
+        save(merged)
+        current = sessions
+        sess = current.empty? && a['sessions'].is_a?(Hash) ? a['sessions'] : current
+        save_sessions(sess)
+        write(KEY_ARCHIVE, '')
+        { restored: archived.length, messages: load, sessions: sess }
+      rescue JSON::ParserError
+        { restored: 0, messages: load, sessions: sessions }
       end
 
       # Идентификаторы сессий провайдеров: { 'claude' => 'uuid', 'codex' => 'thread' }.
