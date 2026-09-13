@@ -77,9 +77,11 @@ export async function* runClaude(conn: PluginConnection, input: RunInput): Async
         continue
       }
       if (message.type === 'stream_event') {
-        const event = message.event as { type?: string; delta?: { type?: string; text?: string } }
+        const event = message.event as { type?: string; delta?: { type?: string; text?: string; thinking?: string } }
         if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta' && event.delta.text) {
           yield { kind: 'text', text: event.delta.text }
+        } else if (event.type === 'content_block_delta' && event.delta?.type === 'thinking_delta' && event.delta.thinking) {
+          yield { kind: 'thinking', text: event.delta.thinking }
         }
         continue
       }

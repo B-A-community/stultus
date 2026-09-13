@@ -10,6 +10,8 @@ export type Piece =
   /** Полная замена текущего текста — для провайдеров без дельт. */
   | { kind: 'text_replace'; text: string }
   | { kind: 'status'; text: string }
+  /** Кусок размышления модели (сводка): показывается в ленте свёрнутой строкой. */
+  | { kind: 'thinking'; text: string }
   | { kind: 'session'; id: string }
   | { kind: 'usage'; usage: Usage }
 

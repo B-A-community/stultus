@@ -43,6 +43,7 @@ export type GatewayMessage =
   | { type: 'welcome'; version: string; providers: ProviderInfo[] }
   | { type: 'turn_start'; turn: number }
   | { type: 'status'; text: string }
+  | { type: 'thinking'; delta: string }
   | { type: 'text'; delta: string }
   | { type: 'text_replace'; text: string }
   | { type: 'tool_call'; call_id: string; name: string; args: Record<string, unknown> }

@@ -99,8 +99,10 @@ export async function* runCodex(conn: PluginConnection, input: RunInput): AsyncG
             yield { kind: 'text_replace', text: item.text }
           }
           texts.set(item.id, item.text)
-        } else if (item.type === 'reasoning' && event.type === 'item.completed') {
-          yield { kind: 'status', text: 'модель думает…' }
+        } else if (item.type === 'reasoning') {
+          // Codex отдаёт размышление целиком по завершении; пока думает — статус.
+          if (event.type === 'item.completed' && item.text) yield { kind: 'thinking', text: item.text }
+          else if (event.type === 'item.started') yield { kind: 'status', text: 'модель думает…' }
         } else if (item.type === 'error') {
           throw new Error(`Codex: ${item.message}`)
         }

@@ -81,7 +81,7 @@ window.StultusRender = function (api) {
         var preview = card.querySelector('.card__preview'); preview.src = imageUrl(r.base64); preview.hidden = false; zoomable(preview);
         card.classList.add('is-done');
         card.querySelector('.card__title').textContent = 'Кадр зафиксирован';
-        card.querySelector('.card__text').textContent = r.width + ' × ' + r.height + ' · создаю визуализацию…';
+        card.querySelector('.card__text').textContent = r.width + ' × ' + r.height + ' · создаю визуализацию…\n\nЗадание: ' + prompt;
         var edited = prompt !== msg.args.prompt;
         api.send({ type: 'tool_result', call_id: msg.call_id, ok: true,
           content: edited ? 'Точный кадр вьюпорта разрешён для постпродакшна. Пользователь изменил задание, в генерацию уходит его текст.' : 'Точный кадр вьюпорта разрешён для постпродакшна.',
@@ -101,7 +101,7 @@ window.StultusRender = function (api) {
     };
     api.hideEmpty(); api.chat.appendChild(card); api.scroll();
   }
-  function frame(id) {
+  function frame(id, prompt) {
     var el = element('section', 'render');
     var head = element('div', 'render__head'), title = element('span', 'render__title', 'Постпродакшн'), buttons = element('div', 'render__switch');
     var before = element('button', 'btn', 'Исходник'), after = element('button', 'btn', 'Результат');
@@ -111,7 +111,10 @@ window.StultusRender = function (api) {
     var footer = element('div', 'render__footer'), note = element('span', 'render__note', 'ИИ-визуализация · сравните с исходником'), save = element('button', 'btn render__save', 'Сохранить PNG ↗');
     save.disabled = true; footer.appendChild(note); footer.appendChild(save);
     var info = element('div', 'render__status'); info.setAttribute('role', 'status');
-    el.appendChild(head); el.appendChild(img); el.appendChild(footer); el.appendChild(info); api.chat.appendChild(el);
+    el.appendChild(head);
+    // Задание, по которому сделан кадр (в том числе отредактированное).
+    if (prompt) { var task = element('div', 'render__prompt', prompt); task.title = 'Задание для генерации'; el.appendChild(task); }
+    el.appendChild(img); el.appendChild(footer); el.appendChild(info); api.chat.appendChild(el);
     function setImages(source, result) {
       img.src = imageUrl(result); img.hidden = false;
       before.onclick = function () { img.src = imageUrl(source); img.alt = 'Исходный кадр SketchUp'; before.setAttribute('aria-pressed', 'true'); after.setAttribute('aria-pressed', 'false'); };
@@ -126,7 +129,7 @@ window.StultusRender = function (api) {
   function result(msg) {
     var job = jobs[msg.id]; if (!job) return;
     job.record.ok = true; job.card.remove(); delete jobs[msg.id];
-    var output = frame(msg.id); output.setImages(msg.source.base64, msg.image.base64);
+    var output = frame(msg.id, msg.prompt); output.setImages(msg.source.base64, msg.image.base64);
     output.info.textContent = 'Сохраняю кадр на этом компьютере…';
     api.remember({ role: 'assistant', text: '', render: { id: msg.id, prompt: msg.prompt }, at: new Date().toISOString() });
     api.rb('cache_render', { id: msg.id, image: msg.image.base64, source: msg.source.base64 }).then(function (r) {
@@ -137,7 +140,7 @@ window.StultusRender = function (api) {
     api.scroll();
   }
   function restore(data) {
-    api.hideEmpty(); var output = frame(data.id); output.info.textContent = 'Загружаю сохранённый кадр…';
+    api.hideEmpty(); var output = frame(data.id, data.prompt); output.info.textContent = 'Загружаю сохранённый кадр…';
     api.rb('get_render', { id: data.id }).then(function (r) {
       if (!r.ok) { output.info.textContent = r.error; return; }
       output.setImages(r.source, r.image); output.save.disabled = false; output.info.textContent = '';

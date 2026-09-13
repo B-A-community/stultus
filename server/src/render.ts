@@ -41,7 +41,9 @@ export function postproductionPrompt(prompt: string): string {
   return [
     'Use the built-in image generation tool to EDIT the attached SketchUp viewport into one finished architectural visualization.',
     'This is sketch-to-render postproduction, not a new design. The attached image is the exact edit target.',
-    'Preserve the camera position, crop, perspective, aspect ratio, silhouettes, all architectural geometry, openings and relative proportions.',
+    'HARD CONSTRAINT — the framing is fixed: keep the camera position, viewing direction, focal length, distance to the objects, crop and aspect ratio EXACTLY as in the attached image.',
+    'Do not zoom in or out, do not move closer or farther, do not re-center, rotate, tilt or re-crop the view. Every object must stay at the same size and the same pixel position as in the source; the edges of the frame stay where they are.',
+    'Preserve the perspective, silhouettes, all architectural geometry, openings and relative proportions.',
     'Improve lighting, realistic materials, reflections, shadows and tonal balance according to the user brief below.',
     'Remove SketchUp selection outlines, axes and editor annotations. Do not invent buildings, windows or structural elements.',
     'Generate exactly one opaque PNG. Do not call APIs, run shell commands, write code, or simulate generation with drawings.',

@@ -203,6 +203,7 @@
         (m.tools || []).forEach(function (t) {
           var el = addTool({ call_id: '', name: t.name, args: { label: t.label, reason: t.label, question: t.label } });
           el.querySelector('.tool__args').textContent = '';
+          if (t.name === 'размышление') el.classList.add('tool--thinking');
           finishTool(el, t.ok !== false, '');
         });
         // Ход без текста (только вызовы) — пузыря не было и при живом ходе.
@@ -273,6 +274,9 @@
         break;
       case 'text':
         appendText(msg.delta || '');
+        break;
+      case 'thinking':
+        appendThinking(msg.delta || '');
         break;
       case 'text_replace':
         replaceText(msg.text || '');
@@ -377,6 +381,7 @@
 
   function ensureBubble() {
     var c = state.current;
+    finishThinking();
     if (c.el && c.el === chat.lastElementChild) return;
     if (c.el) commitText();
     c.el = addMessage('assistant', '', { provider: providerLabel(c.provider) });
@@ -419,9 +424,45 @@
     scrollDown();
   }
 
+  // Размышление модели — строка в ленте, как вызов инструмента: свёрнута,
+  // в заголовке первая фраза, внутри полный текст. Новая строка на каждый
+  // блок размышлений (после текста или инструмента).
+  function appendThinking(delta) {
+    if (!state.current) startCurrent($('providerSelect').value);
+    var c = state.current;
+    if (!c.think || c.think.el !== chat.lastElementChild) {
+      if (c.el) commitText();
+      hideEmpty();
+      var el = $('tplTool').content.firstElementChild.cloneNode(true);
+      el.dataset.state = 'running';
+      el.classList.add('tool--thinking');
+      el.querySelector('.tool__name').textContent = 'размышление';
+      el.querySelector('.tool__state').textContent = 'думает…';
+      el.querySelector('.tool__args').textContent = '';
+      chat.appendChild(el);
+      c.think = { el: el, text: '', record: { name: 'размышление', label: '', ok: true } };
+      c.tools.push(c.think.record);
+    }
+    c.think.text += delta;
+    var first = c.think.text.replace(/\s+/g, ' ').trim();
+    c.think.record.label = first.slice(0, 90);
+    c.think.el.querySelector('.tool__label').textContent = c.think.record.label;
+    c.think.el.querySelector('.tool__result').textContent = c.think.text;
+    scrollDown();
+  }
+
+  function finishThinking() {
+    var c = state.current;
+    if (!c || !c.think) return;
+    c.think.el.dataset.state = 'ok';
+    c.think.el.querySelector('.tool__state').textContent = 'готово';
+    c.think = null;
+  }
+
   function finishCurrent() {
     var c = state.current;
     if (!c) return;
+    finishThinking();
     commitText();
     if (c.tools.length) {
       state.messages.push({ role: 'assistant', text: '', tools: c.tools, provider: providerLabel(c.provider), at: new Date().toISOString() });
@@ -447,6 +488,7 @@
   // ---------- Инструменты -------------------------------------------------
   function onToolCall(msg) {
     if (!state.current) startCurrent($('providerSelect').value);
+    finishThinking();
     // Пришёл инструмент — текущий пузырь закрывается, следующий текст
     // откроет новый (см. ensureBubble).
     commitText();
