@@ -25,6 +25,7 @@ JS зовёт `sketchup.<имя>(id, json)`, Ruby отвечает
 | `ready` | — | `{ settings, history, sessions, instance, selection, archive }` |
 | `scene_state` | `{ full? }` | снимок сцены (см. ниже); `full: false` — только единицы, контекст и выделение |
 | `select` | `{ ids[], mode?, zoom? }` | `{ selected, text, missing_ids?, outside_context_ids? }` |
+| `render_vray` | `{ width?, height?, preset?, timeout? }` | асинхронно `{ ok, mime, base64, width, height, state, seconds }` |
 | `execute_ruby` | `{ code, label? }` | `{ ok, result, output }` или `{ ok: false, error, backtrace[], output }` |
 | `undo` | — | `{ ok }` |
 | `screenshot` | `{ view?, zoom_extents?, width?, height? }` | `{ ok, mime, base64, width, height, bytes }` |
@@ -98,6 +99,7 @@ Ruby → JS без запроса: `window.Stultus.selection({ count, text, by_t
 | `execute_ruby` | `{ code, label? }` | Ruby, сразу |
 | `get_scene` | `{}` | Ruby, сразу |
 | `select` | `{ ids?, mode?, zoom? }` | Ruby, сразу |
+| `render_vray` | `{ width?, height?, preset? }` | Ruby асинхронно: ответ по событию окончания рендера V-Ray, с картинкой; только если в `instance.renderers` есть `vray` |
 | `take_screenshot` | `{ reason, view?, zoom_extents? }` | **пользователь**: карточка «Сделать снимок / Отказать» |
 | `undo` | `{}` | Ruby, сразу |
 | `ask_user` | `{ questions: [{ question, options?, multi? }] }` (старая форма `{ question, options }` тоже принимается) | JS показывает карточку со всеми вопросами (кнопки + «свой вариант»), отвечает «вопросы показаны, закончи ход»; ответы уходят одним сообщением пользователя «Ответы: 1. … — …» |

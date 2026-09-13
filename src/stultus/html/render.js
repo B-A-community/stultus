@@ -24,6 +24,7 @@ window.StultusRender = function (api) {
     document.removeEventListener('keydown', onLightboxKey);
   }
   function onLightboxKey(e) { if (e.key === 'Escape') { e.preventDefault(); closeLightbox(); } }
+  window.StultusLightbox = openLightbox;
   function zoomable(img) {
     img.classList.add('is-zoomable');
     img.title = 'Открыть крупно';

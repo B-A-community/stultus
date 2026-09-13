@@ -26,9 +26,23 @@ module BACommunity
     module Runner
       module_function
 
+      # Нативные плагины (V-Ray, Enscape) роняют весь SketchUp при неверном
+      # вызове — это не Ruby-исключение, и rescue его не ловит (проверено:
+      # чтение параметра V-Ray строковым ключом → fail-fast в ucrtbase.dll).
+      # Поэтому из свободного кода к ним доступа нет: только проверенные
+      # инструменты плагина.
+      NATIVE_GUARD = /\b(VRay|Enscape)\b|Fiddle|dlopen/.freeze
+
       def execute(code, label: nil)
         code = code.to_s
         return { ok: false, error: 'Пустой код' } if code.strip.empty?
+        if code =~ NATIVE_GUARD
+          return {
+            ok: false,
+            error: 'Прямые вызовы V-Ray/Enscape из execute_ruby запрещены: ошибка в них роняет SketchUp целиком. ' \
+                   'Для рендера используй инструмент render_vray; Enscape автоматизации не имеет.'
+          }
+        end
 
         model = Sketchup.active_model
         captured = StringIO.new

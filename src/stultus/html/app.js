@@ -153,6 +153,7 @@
     if (call.name === 'execute_ruby') return a.label || (String(a.code || '').split('\n')[0].slice(0, 80));
     if (call.name === 'take_screenshot') return a.reason || '';
     if (call.name === 'render_viewport') return 'Постпродакшн текущего кадра';
+    if (call.name === 'render_vray') return 'Рендер V-Ray ' + (a.width || 1280) + '×' + (a.height || 720) + (a.preset ? ' · ' + a.preset : '');
     if (call.name === 'ask_user') return a.question || '';
     if (call.name === 'select') return a.mode === 'clear' ? 'снять выделение' : 'выделить ' + ((a.ids || []).length) + ' объект(ов)';
     return '';
@@ -505,6 +506,7 @@
     if (msg.name === 'execute_ruby') run = rb('execute_ruby', { code: msg.args.code, label: msg.args.label });
     else if (msg.name === 'get_scene') run = rb('scene_state', { full: true });
     else if (msg.name === 'select') run = rb('select', msg.args || {});
+    else if (msg.name === 'render_vray') run = rb('render_vray', msg.args || {});
     else if (msg.name === 'undo') run = rb('undo');
     else run = Promise.reject(new Error('Неизвестный инструмент: ' + msg.name));
 
@@ -513,7 +515,16 @@
       record.ok = ok;
       var text = formatResult(msg.name, result);
       finishTool(el, ok, text);
-      send({ type: 'tool_result', call_id: msg.call_id, ok: ok, content: text });
+      var payload = { type: 'tool_result', call_id: msg.call_id, ok: ok, content: text };
+      if (ok && result.base64 && result.mime) {
+        // Картинка рендера — в карточку инструмента и модели.
+        var img = document.createElement('img'); img.className = 'tool__image is-zoomable'; img.alt = 'Рендер V-Ray';
+        img.src = 'data:' + result.mime + ';base64,' + result.base64;
+        img.onclick = function () { if (window.StultusLightbox) window.StultusLightbox(img.src, img.alt); };
+        el.appendChild(img); el.open = true; scrollDown();
+        payload.image = { mime: result.mime, base64: result.base64 };
+      }
+      send(payload);
     }, function (err) {
       record.ok = false;
       finishTool(el, false, String(err && err.message || err));
@@ -530,7 +541,10 @@
       if (result.output) lines.push('stdout:\n' + result.output);
       return lines.join('\n');
     }
-    var copy = Object.assign({}, result); delete copy.ok;
+    if (name === 'render_vray' && result.ok !== false) {
+      return 'Рендер V-Ray готов: ' + result.width + '×' + result.height + ', ' + result.seconds + ' с, состояние ' + result.state + '. Картинка приложена.';
+    }
+    var copy = Object.assign({}, result); delete copy.ok; delete copy.base64;
     return JSON.stringify(copy, null, 1);
   }
 

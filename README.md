@@ -46,7 +46,7 @@ Undo: не понравилось — Ctrl+Z.
   не нужны: соединение исходящее.
 
 Инструменты модели: `execute_ruby`, `get_scene`, `select`, `take_screenshot`,
-`render_viewport`, `undo`, `ask_user`. Подробно — [docs/PROTOCOL.md](docs/PROTOCOL.md).
+`render_viewport`, `render_vray`, `undo`, `ask_user`. Подробно — [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 ## Статус
 
@@ -128,12 +128,13 @@ src/stultus/scene.rb      снимок сцены
 src/stultus/selection.rb  наблюдатель выделения, описание, инструмент select
 src/stultus/screenshot.rb снимок вьюпорта
 src/stultus/render_assets.rb кадры постпродакшна на диске
+src/stultus/vray.rb       рендер V-Ray по официальному API (docs/KNOWLEDGE-VRAY.md)
 src/stultus/history.rb    переписка в файле модели
 src/stultus/settings.rb   адрес/пропуск в реестре SketchUp
 src/stultus/html/         index.html, app.js, app.css — окно
 server/                   gateway: src/{index,chat,mcp,connection,config,prompt}.ts, providers/{claude,codex}.ts
 server/deploy/            Dockerfile, docker-compose.yml, .env.example
-docs/                     ARCHITECTURE, PROTOCOL, POSTPRODUCTION, AGENT-GUIDE, DESIGN-BRIEF, UI-CONTRACT
+docs/                     ARCHITECTURE, PROTOCOL, POSTPRODUCTION, KNOWLEDGE-VRAY, AGENT-GUIDE, DESIGN-BRIEF, UI-CONTRACT
 tests/                    live_*.rb — прогоны на живом SketchUp через мост
 tools/build_rbz.ps1       сборка пакета
 ```

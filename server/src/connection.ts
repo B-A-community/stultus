@@ -11,6 +11,8 @@ export interface InstanceInfo {
   model_title?: string
   model_path?: string | null
   model_guid?: string
+  /** Рендереры, которые плагин нашёл в этом SketchUp: [{ id: 'vray', version }]. */
+  renderers?: Array<{ id: string; version?: string }>
 }
 
 /** Ответ плагина на вызов инструмента. */

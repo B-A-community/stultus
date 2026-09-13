@@ -11,3 +11,4 @@
 .render__prompt{padding:10px 14px;border-bottom:1px solid var(--line);font-size:12px;line-height:1.5;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere}
 /* Строка размышления модели: текст переносится, а не уезжает вбок как код. */
 .tool--thinking .tool__result{white-space:pre-wrap;font-family:var(--font);font-size:12px;line-height:1.5}
+.tool__image{display:block;max-width:100%;max-height:60vh;object-fit:contain;margin:0 0 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg)}

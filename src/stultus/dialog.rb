@@ -83,6 +83,18 @@ module BACommunity
 
         register(dialog, 'undo') { |_id, _p| Runner.undo }
 
+        # Рендер V-Ray идёт в фоне: ответ уходит, когда рендерер сообщит
+        # об окончании, а не по возврату обработчика.
+        register_async(dialog, 'render_vray') do |_id, p, done|
+          VRayRender.render(
+            width:   (p['width'] || 1280).to_i,
+            height:  (p['height'] || 720).to_i,
+            preset:  (p['preset'] || 'medium').to_s,
+            timeout: (p['timeout'] || 600).to_f,
+            &done
+          )
+        end
+
         register(dialog, 'screenshot') do |_id, p|
           if p['framing'] == 'viewport'
             Screenshot.capture_current
@@ -137,6 +149,23 @@ module BACommunity
         dialog
       end
 
+      # Как register, но обработчик отвечает сам, через done.call(result),
+      # когда результат готов (рендер, ожидание события).
+      def register_async(dialog, name)
+        dialog.add_action_callback(name) do |_ctx, id, json|
+          payload = json.to_s.empty? ? {} : JSON.parse(json)
+          answered = false
+          done = proc do |result|
+            next if answered
+            answered = true
+            reply(dialog, id, result)
+          end
+          yield(id, payload, done)
+        rescue StandardError, ScriptError => e
+          reply(dialog, id, { ok: false, error: "#{e.class}: #{e.message}", backtrace: Array(e.backtrace).first(4) })
+        end
+      end
+
       # Наблюдатель выделения живёт, пока открыто окно; при смене модели
       # (другой файл в этом же окне) перевешивается.
       def watch_selection(dialog)
@@ -172,6 +201,14 @@ module BACommunity
         dialog.execute_script(script)
       end
 
+      def renderers
+        list = []
+        list << { id: 'vray', version: VRayRender.version } if VRayRender.available?
+        ens = Sketchup.extensions.find { |e| e.name =~ /enscape/i && e.loaded? }
+        list << { id: 'enscape', version: ens.version.to_s } if ens
+        list
+      end
+
       # Журнал окна — в %TEMP%/stultus_dialog.log; нужен, чтобы ловить
       # события CEF, которые иначе не видны (когда и почему окно «закрылось»).
       def log(line)
@@ -189,7 +226,10 @@ module BACommunity
           pid:         Process.pid,
           model_title: m.title.to_s.empty? ? 'Untitled' : m.title,
           model_path:  m.path.to_s.empty? ? nil : m.path,
-          model_guid:  m.guid
+          model_guid:  m.guid,
+          # Какие рендереры доступны в этом SketchUp — gateway по ним решает,
+          # выдавать ли модели инструмент render_vray и что писать в подсказку.
+          renderers:   renderers
         }
       end
     end

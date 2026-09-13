@@ -20,7 +20,7 @@ import { pngImage, renderConfigured, renderViewport } from './render.ts'
 export const MCP_SERVER_NAME = 'stultus'
 
 /** Что модель называет в описаниях — единый источник для обоих провайдеров. */
-export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'undo', 'ask_user'] as const
+export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'render_vray', 'undo', 'ask_user'] as const
 
 function build(conn: PluginConnection): McpServer {
   const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.1.0' })
@@ -143,6 +143,32 @@ function build(conn: PluginConnection): McpServer {
       const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [
         { type: 'text', text: r.content },
       ]
+      if (r.image) content.push({ type: 'image', data: r.image.base64, mimeType: r.image.mime })
+      return { content, isError: !r.ok }
+    },
+  )
+
+  server.registerTool(
+    'render_vray',
+    {
+      title: 'Рендер V-Ray текущего вида',
+      description:
+        'Физический рендер текущего вида SketchUp в V-Ray (если он установлен у пользователя — см. ' +
+        'renderers в снимке сцены). Камера — текущая во вьюпорте, размер и качество задаются здесь; ' +
+        'настройки V-Ray после рендера возвращаются как были. Результат приходит картинкой и показан ' +
+        'пользователю. Работает в фоне, SketchUp не блокируется; draft 1280×720 — секунды, high — минуты. ' +
+        'Не вызывай V-Ray через execute_ruby: это запрещено и роняет SketchUp.',
+      inputSchema: {
+        width: z.number().int().min(64).max(8192).optional().describe('Ширина, px (по умолчанию 1280)'),
+        height: z.number().int().min(64).max(8192).optional().describe('Высота, px (по умолчанию 720)'),
+        preset: z.enum(['draft', 'medium', 'high']).optional().describe('Качество: draft для проверки, high для финала'),
+      },
+    },
+    async ({ width, height, preset }) => {
+      const has = (conn.instance.renderers ?? []).some((r) => r.id === 'vray')
+      if (!has) return { content: [{ type: 'text', text: 'V-Ray в этом SketchUp не установлен — рендер недоступен.' }], isError: true }
+      const r = await conn.callTool('render_vray', { width, height, preset })
+      const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [{ type: 'text', text: r.content }]
       if (r.image) content.push({ type: 'image', data: r.image.base64, mimeType: r.image.mime })
       return { content, isError: !r.ok }
     },
