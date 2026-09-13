@@ -79,7 +79,7 @@ main.chat#chat                       ← прокручиваемая лента
   details.tool[data-state=running|ok|error]
      summary.tool__summary → .tool__icon .tool__name .tool__label .tool__state
      pre.tool__args, pre.tool__result
-  .card.card--ask   → .card__title .card__text .card__options(button.btn…)
+  .card.card--ask.card--questions → .card__title, .ask__q×N (.ask__title, .ask__options > button.ask__opt[aria-pressed], input.ask__custom), .card__options.ask > button.btn--primary «Ответить»
   .card.card--shot  → .card__title .card__text .card__options(button[data-act=allow], button[data-act=deny]) img.card__preview
      (.card.is-done — решение принято, кнопки скрыты)
 

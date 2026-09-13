@@ -100,7 +100,7 @@ Ruby → JS без запроса: `window.Stultus.selection({ count, text, by_t
 | `select` | `{ ids?, mode?, zoom? }` | Ruby, сразу |
 | `take_screenshot` | `{ reason, view?, zoom_extents? }` | **пользователь**: карточка «Сделать снимок / Отказать» |
 | `undo` | `{}` | Ruby, сразу |
-| `ask_user` | `{ question, options? }` | JS показывает карточку и сразу отвечает «вопрос показан, закончи ход» |
+| `ask_user` | `{ questions: [{ question, options?, multi? }] }` (старая форма `{ question, options }` тоже принимается) | JS показывает карточку со всеми вопросами (кнопки + «свой вариант»), отвечает «вопросы показаны, закончи ход»; ответы уходят одним сообщением пользователя «Ответы: 1. … — …» |
 
 ## 3. Gateway ↔ модель (MCP)
 
