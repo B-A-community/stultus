@@ -566,22 +566,77 @@
 
   function onAskTool(msg, record) {
     record.ok = true;
-    onAsk({ question: (msg.args || {}).question, options: (msg.args || {}).options });
-    send({ type: 'tool_result', call_id: msg.call_id, ok: true, content: 'Вопрос показан пользователю. Закончи ход и жди ответа — ничего не строй.' });
+    var a = msg.args || {};
+    var questions = Array.isArray(a.questions) && a.questions.length ? a.questions : (a.question ? [{ question: a.question, options: a.options }] : []);
+    onAsk({ questions: questions });
+    send({ type: 'tool_result', call_id: msg.call_id, ok: true, content: 'Вопросы (' + questions.length + ') показаны пользователю. Закончи ход и жди — ответы на все придут одним сообщением. Ничего не строй.' });
   }
 
+  // Карточка вопросов: у каждого вопроса варианты-кнопки и поле «свой
+  // вариант», внизу одна кнопка «Ответить» — все ответы уходят одним
+  // сообщением. Как в Claude Code и ChatGPT.
   function onAsk(msg) {
     hideEmpty();
+    var questions = (msg.questions || []).filter(function (q) { return q && q.question; });
+    if (!questions.length) return;
     var card = $('tplAsk').content.firstElementChild.cloneNode(true);
-    card.querySelector('.card__text').textContent = msg.question || '';
-    var box = card.querySelector('.card__options');
-    (msg.options || []).forEach(function (opt) {
-      var b = document.createElement('button'); b.className = 'btn'; b.textContent = opt;
-      b.onclick = function () { card.classList.add('is-done'); input.value = opt; sendChat(); };
-      box.appendChild(b);
+    card.classList.add('card--questions');
+    card.querySelector('.card__title').textContent = questions.length > 1 ? 'Уточним ' + questions.length + ' детали' : 'Уточним одну деталь';
+    var text = card.querySelector('.card__text'); text.hidden = true;
+    var box = card.querySelector('.card__options'); box.classList.add('ask');
+    var answers = questions.map(function () { return { picked: [], custom: '' }; });
+
+    function answered(i) { return answers[i].custom.trim() !== '' || answers[i].picked.length > 0; }
+    function refresh() { submit.disabled = !answers.every(function (_a, i) { return answered(i); }); }
+
+    questions.forEach(function (q, i) {
+      var block = document.createElement('div'); block.className = 'ask__q';
+      var title = document.createElement('div'); title.className = 'ask__title';
+      title.textContent = (questions.length > 1 ? (i + 1) + '. ' : '') + q.question;
+      block.appendChild(title);
+      var opts = document.createElement('div'); opts.className = 'ask__options';
+      var buttons = [];
+      (q.options || []).forEach(function (opt) {
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'btn ask__opt'; b.textContent = opt;
+        b.setAttribute('aria-pressed', 'false');
+        b.onclick = function () {
+          var idx = answers[i].picked.indexOf(opt);
+          if (q.multi) { if (idx >= 0) answers[i].picked.splice(idx, 1); else answers[i].picked.push(opt); }
+          else { answers[i].picked = idx >= 0 ? [] : [opt]; }
+          buttons.forEach(function (x) { x.setAttribute('aria-pressed', String(answers[i].picked.indexOf(x.textContent) >= 0)); });
+          refresh();
+        };
+        buttons.push(b); opts.appendChild(b);
+      });
+      block.appendChild(opts);
+      var custom = document.createElement('input'); custom.type = 'text'; custom.className = 'ask__custom';
+      custom.placeholder = (q.options || []).length ? 'Свой вариант…' : 'Ваш ответ…';
+      custom.setAttribute('aria-label', 'Свой вариант ответа');
+      custom.oninput = function () { answers[i].custom = custom.value; refresh(); };
+      custom.onkeydown = function (e) { if (e.key === 'Enter' && !submit.disabled) { e.preventDefault(); submit.click(); } };
+      block.appendChild(custom);
+      card.appendChild(block);
     });
+
+    var submit = document.createElement('button'); submit.type = 'button'; submit.className = 'btn btn--primary'; submit.textContent = 'Ответить ↗';
+    submit.disabled = true;
+    submit.onclick = function () {
+      if (submit.disabled || state.busy) return;
+      var lines = questions.map(function (q, i) {
+        var parts = answers[i].picked.slice();
+        if (answers[i].custom.trim()) parts.push(answers[i].custom.trim());
+        return (questions.length > 1 ? (i + 1) + '. ' : '') + q.question + ' — ' + parts.join('; ');
+      });
+      card.classList.add('is-done');
+      card.querySelectorAll('.ask__opt, .ask__custom').forEach(function (el) { el.disabled = true; });
+      input.value = (questions.length > 1 ? 'Ответы:\n' : 'Ответ: ') + lines.join('\n');
+      sendChat();
+    };
+    box.appendChild(submit);
+    card.appendChild(box);
     chat.appendChild(card); scrollDown();
-    state.messages.push({ role: 'assistant', text: 'Вопрос: ' + (msg.question || ''), tools: [], provider: providerLabel($('providerSelect').value), at: new Date().toISOString() });
+    var first = card.querySelector('.ask__custom'); if (first && !questions[0].options) first.focus();
+    state.messages.push({ role: 'assistant', text: (questions.length > 1 ? 'Вопросы:\n' : 'Вопрос: ') + questions.map(function (q, i) { return (questions.length > 1 ? (i + 1) + '. ' : '') + q.question + ((q.options || []).length ? ' [' + q.options.join(' / ') + ']' : ''); }).join('\n'), tools: [], provider: providerLabel($('providerSelect').value), at: new Date().toISOString() });
   }
 
   // ---------- Настройки ---------------------------------------------------

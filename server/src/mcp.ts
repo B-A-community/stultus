@@ -166,15 +166,33 @@ function build(conn: PluginConnection): McpServer {
     {
       title: 'Спросить пользователя',
       description:
-        'Задать пользователю вопрос и закончить ход. Ответ придёт следующим сообщением. Используй, ' +
-        'когда не хватает размера, места или смысла — не угадывай.',
+        'Задать пользователю ВСЕ уточняющие вопросы одним вызовом и закончить ход. У каждого вопроса ' +
+        '2–4 варианта с конкретными значениями (размеры в мм, материалы, места); пользователь может ' +
+        'выбрать вариант или написать свой. Ответы на все вопросы придут одним следующим сообщением. ' +
+        'Используй до первого изменения модели, когда не хватает размера, места, количества или ' +
+        'смысла — не угадывай. Не задавай вопросы по одному в разных ходах.',
       inputSchema: {
-        question: z.string().describe('Вопрос по-русски'),
-        options: z.array(z.string()).max(6).optional().describe('Варианты ответа кнопками'),
+        questions: z
+          .array(
+            z.object({
+              question: z.string().min(1).max(300).describe('Вопрос по-русски'),
+              options: z.array(z.string().min(1).max(80)).max(6).optional().describe('Варианты ответа кнопками'),
+              multi: z.boolean().optional().describe('Можно выбрать несколько вариантов'),
+            }),
+          )
+          .min(1)
+          .max(8)
+          .optional()
+          .describe('Список вопросов — задавай все нужные сразу'),
+        // Старая форма — один вопрос; оставлена для совместимости.
+        question: z.string().optional(),
+        options: z.array(z.string()).max(6).optional(),
       },
     },
-    async ({ question, options }) => {
-      const r = await conn.callTool('ask_user', { question, options })
+    async ({ questions, question, options }) => {
+      const list = questions?.length ? questions : question ? [{ question, options }] : []
+      if (!list.length) return { content: [{ type: 'text', text: 'Нет вопросов: передай questions[].' }], isError: true }
+      const r = await conn.callTool('ask_user', { questions: list })
       return { content: [{ type: 'text', text: r.content }], isError: !r.ok }
     },
   )
