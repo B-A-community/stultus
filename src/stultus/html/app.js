@@ -542,7 +542,8 @@
       return lines.join('\n');
     }
     if (name === 'render_vray' && result.ok !== false) {
-      return 'Рендер V-Ray готов: ' + result.width + '×' + result.height + ', ' + result.seconds + ' с, состояние ' + result.state + '. Картинка приложена.';
+      return 'Рендер V-Ray готов: ' + result.width + '×' + result.height + ', ' + result.seconds + ' с, состояние ' + result.state + '. Картинка приложена.' +
+        (result.saved_to ? ' Сохранено: ' + result.saved_to : '') + (result.save_error ? ' Не удалось сохранить на диск: ' + result.save_error : '');
     }
     var copy = Object.assign({}, result); delete copy.ok; delete copy.base64;
     return JSON.stringify(copy, null, 1);

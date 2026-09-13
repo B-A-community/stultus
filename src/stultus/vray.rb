@@ -13,6 +13,7 @@
 # Рендер идёт в фоне, SketchUp не блокируется; ответ уходит колбэком.
 
 require 'base64'
+require 'fileutils'
 
 module BACommunity
   module Stultus
@@ -43,8 +44,10 @@ module BACommunity
       end
 
       # Асинхронный рендер. done.call(hash) вызывается на главном потоке.
-      # width/height — пиксели; preset — draft|medium|high; timeout — секунды.
-      def render(width: 1280, height: 720, preset: 'medium', timeout: 600, &done)
+      # width/height — пиксели; preset — draft|medium|high; timeout — секунды;
+      # save_to — файл .png или папка (имя подставится), куда дополнительно
+      # сохранить кадр; папка создаётся.
+      def render(width: 1280, height: 720, preset: 'medium', timeout: 600, save_to: nil, &done)
         return done.call(ok: false, error: 'V-Ray не установлен или не загружен.') unless available?
         ctx = ::VRay::Context.active
         scene = ctx.scene
@@ -73,6 +76,7 @@ module BACommunity
           # Сохраняем не из колбэка рендерера, а следующим тиком главного потока.
           UI.start_timer(0.3, false) do
             result = collect(rd, new_state, started)
+            result = save_copy(result, save_to) if result[:ok] && save_to && !save_to.to_s.strip.empty?
             restore(scene, out, sampler, saved, saved_sampler)
             rd.unsubscribe(sub) rescue nil
             done.call(result)
@@ -107,6 +111,25 @@ module BACommunity
         }
       rescue StandardError => e
         { ok: false, error: "#{e.class}: #{e.message}", state: final_state }
+      end
+
+      # Сохранить кадр по пути пользователя. Существующая папка или путь со
+      # слешем на конце → файл stultus_vray_<дата>.png в ней; иначе это файл,
+      # расширение .png добавляется, если его нет.
+      def save_copy(result, save_to)
+        raw = save_to.to_s.strip
+        path = File.expand_path(raw.tr('\\', '/'))
+        if File.directory?(path) || raw.end_with?('/', '\\')
+          FileUtils.mkdir_p(path)
+          path = File.join(path, "stultus_vray_#{Time.now.strftime('%Y%m%d_%H%M%S')}.png")
+        else
+          FileUtils.mkdir_p(File.dirname(path))
+          path = "#{path}.png" unless File.extname(path).casecmp('.png').zero?
+        end
+        File.binwrite(path, Base64.strict_decode64(result[:base64]))
+        result.merge(saved_to: path)
+      rescue StandardError => e
+        result.merge(save_error: "#{e.class}: #{e.message}")
       end
 
       def restore(scene, out, sampler, saved, saved_sampler)

@@ -156,18 +156,20 @@ function build(conn: PluginConnection): McpServer {
         'Физический рендер текущего вида SketchUp в V-Ray (если он установлен у пользователя — см. ' +
         'renderers в снимке сцены). Камера — текущая во вьюпорте, размер и качество задаются здесь; ' +
         'настройки V-Ray после рендера возвращаются как были. Результат приходит картинкой и показан ' +
-        'пользователю. Работает в фоне, SketchUp не блокируется; draft 1280×720 — секунды, high — минуты. ' +
+        'пользователю. save_path сохраняет PNG на диск пользователя (файл или папка). ' +
+        'Работает в фоне, SketchUp не блокируется; draft 1280×720 — секунды, high — минуты. ' +
         'Не вызывай V-Ray через execute_ruby: это запрещено и роняет SketchUp.',
       inputSchema: {
         width: z.number().int().min(64).max(8192).optional().describe('Ширина, px (по умолчанию 1280)'),
         height: z.number().int().min(64).max(8192).optional().describe('Высота, px (по умолчанию 720)'),
         preset: z.enum(['draft', 'medium', 'high']).optional().describe('Качество: draft для проверки, high для финала'),
+        save_path: z.string().max(500).optional().describe('Куда сохранить PNG на компьютере пользователя: файл .png или папка (имя подставится). Без него кадр только показывается'),
       },
     },
-    async ({ width, height, preset }) => {
+    async ({ width, height, preset, save_path }) => {
       const has = (conn.instance.renderers ?? []).some((r) => r.id === 'vray')
       if (!has) return { content: [{ type: 'text', text: 'V-Ray в этом SketchUp не установлен — рендер недоступен.' }], isError: true }
-      const r = await conn.callTool('render_vray', { width, height, preset })
+      const r = await conn.callTool('render_vray', { width, height, preset, save_path })
       const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [{ type: 'text', text: r.content }]
       if (r.image) content.push({ type: 'image', data: r.image.base64, mimeType: r.image.mime })
       return { content, isError: !r.ok }

@@ -91,6 +91,7 @@ module BACommunity
             height:  (p['height'] || 720).to_i,
             preset:  (p['preset'] || 'medium').to_s,
             timeout: (p['timeout'] || 600).to_f,
+            save_to: p['save_path'],
             &done
           )
         end
