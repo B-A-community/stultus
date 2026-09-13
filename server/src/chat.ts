@@ -84,7 +84,10 @@ export async function runChat(conn: PluginConnection, msg: Extract<PluginMessage
     conn.send({ type: 'error', message: `${provider.label} на gateway не настроен.` })
     return
   }
-  if (msg.sessions) conn.sessions = { ...conn.sessions, ...msg.sessions }
+  // Окно присылает сессии с каждым ходом и оно же их хранит (файл модели).
+  // Заменяем, а не сливаем: после «Удалить историю» приходит пустой набор,
+  // и разговор должен начаться заново, а не продолжить старую сессию.
+  if (msg.sessions) conn.sessions = { ...msg.sessions }
 
   const controller = new AbortController()
   conn.running = { turn: msg.turn, cancel: () => controller.abort(), signal: controller.signal }
