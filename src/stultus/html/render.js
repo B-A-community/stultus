@@ -4,6 +4,31 @@ window.StultusRender = function (api) {
   var jobs = {};
   function imageUrl(base64) { return 'data:image/png;base64,' + base64; }
   function element(tag, name, text) { var el = document.createElement(tag); el.className = name; if (text) el.textContent = text; return el; }
+  // Миниатюра по клику раскрывается на всё окно; клик или Escape закрывает.
+  var lightbox = null;
+  function openLightbox(src, alt) {
+    closeLightbox();
+    lightbox = element('div', 'lightbox');
+    lightbox.setAttribute('role', 'dialog');
+    lightbox.setAttribute('aria-label', alt || 'Изображение');
+    var img = element('img', 'lightbox__image'); img.src = src; img.alt = alt || '';
+    var hint = element('div', 'lightbox__hint', 'Клик или Esc — закрыть');
+    lightbox.appendChild(img); lightbox.appendChild(hint);
+    lightbox.onclick = closeLightbox;
+    document.body.appendChild(lightbox);
+    document.addEventListener('keydown', onLightboxKey);
+  }
+  function closeLightbox() {
+    if (!lightbox) return;
+    lightbox.remove(); lightbox = null;
+    document.removeEventListener('keydown', onLightboxKey);
+  }
+  function onLightboxKey(e) { if (e.key === 'Escape') { e.preventDefault(); closeLightbox(); } }
+  function zoomable(img) {
+    img.classList.add('is-zoomable');
+    img.title = 'Открыть крупно';
+    img.onclick = function () { if (img.src && !img.hidden) openLightbox(img.src, img.alt); };
+  }
   function status(msg) {
     var job = jobs[msg.id]; if (!job) return;
     job.card.querySelector('.card__text').textContent = msg.text;
@@ -53,7 +78,7 @@ window.StultusRender = function (api) {
         if (jobs[id] !== job) return;
         if (!r || !r.ok) throw new Error(r && r.error || 'Снимок не получен.');
         job.source = r.base64;
-        var preview = card.querySelector('.card__preview'); preview.src = imageUrl(r.base64); preview.hidden = false;
+        var preview = card.querySelector('.card__preview'); preview.src = imageUrl(r.base64); preview.hidden = false; zoomable(preview);
         card.classList.add('is-done');
         card.querySelector('.card__title').textContent = 'Кадр зафиксирован';
         card.querySelector('.card__text').textContent = r.width + ' × ' + r.height + ' · создаю визуализацию…';
@@ -82,7 +107,7 @@ window.StultusRender = function (api) {
     var before = element('button', 'btn', 'Исходник'), after = element('button', 'btn', 'Результат');
     before.setAttribute('aria-pressed', 'false'); after.setAttribute('aria-pressed', 'true');
     buttons.appendChild(before); buttons.appendChild(after); head.appendChild(title); head.appendChild(buttons);
-    var img = element('img', 'render__image'); img.alt = 'ИИ-визуализация выбранного ракурса'; img.hidden = true;
+    var img = element('img', 'render__image'); img.alt = 'ИИ-визуализация выбранного ракурса'; img.hidden = true; zoomable(img);
     var footer = element('div', 'render__footer'), note = element('span', 'render__note', 'ИИ-визуализация · сравните с исходником'), save = element('button', 'btn render__save', 'Сохранить PNG ↗');
     save.disabled = true; footer.appendChild(note); footer.appendChild(save);
     var info = element('div', 'render__status'); info.setAttribute('role', 'status');

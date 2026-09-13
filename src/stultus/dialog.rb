@@ -119,6 +119,12 @@ module BACommunity
           { settings: Settings.update(p['settings'] || {}) }
         end
 
+        # Журнал из JS: ошибки страницы и отладочные записи — в stultus_dialog.log.
+        register(dialog, 'log') do |_id, p|
+          log("js: #{p['text'].to_s[0, 2000]}")
+          { ok: true }
+        end
+
         register(dialog, 'open_url') do |_id, p|
           UI.openURL(p['url'].to_s) if p['url'].to_s.start_with?('http')
           { ok: true }

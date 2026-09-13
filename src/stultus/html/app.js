@@ -34,7 +34,16 @@
     });
   }
 
+  // Ошибки страницы — в журнал плагина: внутри SketchUp консоли нет.
+  window.addEventListener('error', function (e) {
+    try { window.sketchup && window.sketchup.log && window.sketchup.log('e', JSON.stringify({ text: 'error: ' + e.message + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno })); } catch (_) {}
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    try { window.sketchup && window.sketchup.log && window.sketchup.log('e', JSON.stringify({ text: 'rejection: ' + (e.reason && e.reason.message || e.reason) })); } catch (_) {}
+  });
+
   window.Stultus = {
+    log: function (text) { rb('log', { text: String(text) }).catch(function () {}); },
     receive: function (msg) {
       var p = pendingRuby[msg.id];
       if (!p) return;
