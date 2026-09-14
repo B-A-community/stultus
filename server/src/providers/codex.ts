@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Codex } from '@openai/codex-sdk'
 import { config } from '../config.ts'
@@ -70,7 +71,23 @@ export async function* runCodex(conn: PluginConnection, input: RunInput): AsyncG
   }
   const thread = input.resume ? codex.resumeThread(input.resume, options) : codex.startThread(options)
 
-  const { events } = await thread.runStreamed(input.prompt, { signal: input.signal })
+  // Картинки: Codex принимает только файлы — кладём оригиналы во временную папку хода.
+  const attachments = input.attachments ?? []
+  let userInput: string | Array<{ type: 'text'; text: string } | { type: 'local_image'; path: string }> = input.prompt
+  let tempDir: string | null = null
+  if (attachments.length) {
+    tempDir = mkdtempSync(join(tmpdir(), 'stultus-att-'))
+    const parts: Array<{ type: 'text'; text: string } | { type: 'local_image'; path: string }> = []
+    attachments.forEach((a, i) => {
+      const ext = a.mime === 'image/jpeg' ? '.jpg' : a.mime === 'image/webp' ? '.webp' : a.mime === 'image/gif' ? '.gif' : '.png'
+      const path = join(tempDir!, `${i + 1}${ext}`)
+      writeFileSync(path, Buffer.from(a.base64, 'base64'))
+      parts.push({ type: 'local_image', path })
+    })
+    parts.push({ type: 'text', text: `${input.prompt}\n\n[Приложено изображений: ${attachments.length} — ${attachments.map((a) => a.name).join(', ')}]` })
+    userInput = parts
+  }
+  const { events } = await thread.runStreamed(userInput, { signal: input.signal })
 
   const texts = new Map<string, string>()
   let lastMessageId: string | null = null
@@ -109,6 +126,7 @@ export async function* runCodex(conn: PluginConnection, input: RunInput): AsyncG
         break
       }
       case 'turn.completed': {
+        if (tempDir) { rmSync(tempDir, { recursive: true, force: true }); tempDir = null }
         const u = event.usage
         yield {
           kind: 'usage',

@@ -90,12 +90,17 @@ export async function runChat(conn: PluginConnection, msg: Extract<PluginMessage
   if (msg.sessions) conn.sessions = { ...msg.sessions }
 
   const controller = new AbortController()
+  conn.turnToolCalls = 0
+  conn.budgetStopped = false
   conn.running = { turn: msg.turn, cancel: () => controller.abort(), signal: controller.signal }
   conn.send({ type: 'turn_start', turn: msg.turn })
 
   const model = msg.model && provider.models.includes(msg.model) ? msg.model : provider.default
   const prompt = buildPrompt(msg.text, msg.scene)
   const started = Date.now()
+  if (msg.attachments?.length) {
+    console.log(`[ход ${msg.turn}] вложений: ${msg.attachments.map((a) => `${a.name} ${Math.round((a.base64.length * 3) / 4 / 1024)} КБ`).join(', ')}`)
+  }
   const initialToolCalls = conn.toolCalls
   let producedOutput = false
 
@@ -106,7 +111,7 @@ export async function runChat(conn: PluginConnection, msg: Extract<PluginMessage
   const attempt = async (resume: string | undefined): Promise<boolean> => {
     let produced = false
     console.log(`[ход ${msg.turn}] ${conn.instance.model_title ?? '?'} → ${provider.label} ${model}${resume ? ' (продолжение)' : ''}`)
-    for await (const piece of provider.run(conn, { prompt, model, resume, signal: controller.signal })) {
+    for await (const piece of provider.run(conn, { prompt, model, resume, signal: controller.signal, attachments: msg.attachments })) {
       switch (piece.kind) {
         case 'text':
           producedOutput = true
@@ -169,10 +174,15 @@ export async function runChat(conn: PluginConnection, msg: Extract<PluginMessage
     if (controller.signal.aborted) {
       // Остановка по кнопке: SDK после interrupt отдаёт ошибочный результат,
       // но для человека это не ошибка, а его собственное решение.
-      console.log(`[ход ${msg.turn}] остановлен пользователем`)
+      console.log(`[ход ${msg.turn}] ${conn.budgetStopped ? 'остановлен пределом вызовов' : 'остановлен пользователем'}`)
       // Сначала done (окно на нём очищает строку состояния), потом статус.
       conn.send({ type: 'done' })
-      conn.send({ type: 'status', text: 'Остановлено. Сделанное осталось в модели, отменить — Ctrl+Z в SketchUp.' })
+      conn.send({
+        type: 'status',
+        text: conn.budgetStopped
+          ? `Достигнут предел вызовов за ход (${config.turnMaxToolCalls}). Ответьте «Продолжай» — модель продолжит с того же места.`
+          : 'Остановлено. Сделанное осталось в модели, отменить — Ctrl+Z в SketchUp.',
+      })
       return
     }
     console.error(`[ход ${msg.turn}] ошибка: ${message}`)

@@ -33,8 +33,26 @@ export async function* runClaude(conn: PluginConnection, input: RunInput): Async
   if (config.claudeOauthToken) env.CLAUDE_CODE_OAUTH_TOKEN = config.claudeOauthToken
   if (config.anthropicKey) env.ANTHROPIC_API_KEY = config.anthropicKey
 
+  // С картинками промпт идёт сообщением с блоками image (оригиналы base64).
+  const attachments = input.attachments ?? []
+  const prompt = attachments.length
+    ? (async function* () {
+        yield {
+          type: 'user' as const,
+          parent_tool_use_id: null,
+          message: {
+            role: 'user' as const,
+            content: [
+              ...attachments.map((a) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: a.mime as 'image/png', data: a.base64 } })),
+              { type: 'text' as const, text: `${input.prompt}\n\n[Приложено изображений: ${attachments.length} — ${attachments.map((a) => a.name).join(', ')}]` },
+            ],
+          },
+        }
+      })()
+    : input.prompt
+
   const run = query({
-    prompt: input.prompt,
+    prompt,
     options: {
       model: input.model,
       systemPrompt: systemPrompt(),

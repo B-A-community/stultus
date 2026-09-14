@@ -82,7 +82,8 @@
     turnOps: 0,        // сколько execute_ruby было в текущем ходе — первый создаёт пункт Undo
     turnLabel: '',
     recipes: [],       // копилка приёмов с gateway
-    accent: 'lime'     // цвет этого окна (хранится в файле модели)
+    accent: 'lime',    // цвет этого окна (хранится в файле модели)
+    attachments: []    // картинки к следующему сообщению: {name, mime, base64 (оригинал), thumb, path}
   };
 
   // Десять цветов окна: свой у каждой открытой модели, чтобы окна не путались.
@@ -211,7 +212,7 @@
     state.messages = messages || [];
     state.messages.forEach(function (m) {
       if (m.render) { renders.restore(m.render); return; }
-      if (m.role === 'user') addMessage('user', m.text);
+      if (m.role === 'user') { var ue = addMessage('user', m.text); if (m.attachments && m.attachments.length) showImages(ue, m.attachments); }
       else if (m.role === 'assistant') {
         (m.tools || []).forEach(function (t) {
           var el = addTool({ call_id: '', name: t.name, args: { label: t.label, reason: t.label, question: t.label } });
@@ -363,6 +364,7 @@
   // ---------- Ход ---------------------------------------------------------
   function sendChat() {
     var text = input.value.trim();
+    if (state.attachments.length && !text) text = 'Смотри приложенные изображения.';
     if (!text || state.busy) return;
     if (!state.ws || state.ws.readyState !== 1) { hint('Нет связи с gateway — проверьте настройки.'); return; }
     var provider = $('providerSelect').value, model = $('modelSelect').value;
@@ -370,8 +372,11 @@
 
     input.value = '';
     hint('');
-    addMessage('user', text);
-    state.messages.push({ role: 'user', text: text, at: new Date().toISOString() });
+    var atts = state.attachments; state.attachments = []; renderAttachments();
+    var userEl = addMessage('user', text);
+    if (atts.length) showImages(userEl, atts);
+    state.messages.push({ role: 'user', text: text, at: new Date().toISOString(),
+      attachments: atts.map(function (a) { return { name: a.name, path: a.path, thumb: a.thumb }; }) });
     setBusy(true);
     state.turn += 1;
     state.turnOps = 0;
@@ -382,7 +387,9 @@
     // Галочка решает только, класть ли полный снимок сцены.
     var full = $('attachScene').checked;
     var go = function (scene) {
-      send({ type: 'chat', turn: state.turn, text: text, provider: provider, model: model, scene: scene || null, sessions: state.sessions });
+      // Оригиналы картинок — модели; миниатюры остаются только в окне.
+      send({ type: 'chat', turn: state.turn, text: text, provider: provider, model: model, scene: scene || null, sessions: state.sessions,
+        attachments: atts.map(function (a) { return { name: a.name, mime: a.mime, base64: a.base64 }; }) });
     };
     rb('scene_state', { full: full }).then(go, function () { go(null); });
   }
@@ -524,6 +531,82 @@
     };
     box.appendChild(b); last.appendChild(box); scrollDown();
   }
+
+  // ---------- Вложения (картинки) ----------
+  // Оригинал сохраняется в папку «<проект>-content» рядом с файлом модели и
+  // уходит модели как есть; миниатюра (canvas, 240 px) — только для ленты.
+  function fileToBase64(file) {
+    return new Promise(function (resolve, reject) {
+      var r = new FileReader(); r.onload = function () { resolve(String(r.result).split(',')[1] || ''); }; r.onerror = function () { reject(r.error); }; r.readAsDataURL(file);
+    });
+  }
+  function makeThumb(dataUrl) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () {
+        var max = 240, k = Math.min(1, max / Math.max(img.width, img.height));
+        var c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = function () { resolve(''); };
+      img.src = dataUrl;
+    });
+  }
+  function addFiles(files) {
+    var list = [].slice.call(files || []).filter(function (f) { return f && /^image\//.test(f.type); });
+    if (!list.length) { hint('Приложить можно только изображения.'); return; }
+    list.forEach(function (file) {
+      var name = file.name || ('image_' + Date.now() + '.png');
+      fileToBase64(file).then(function (b64) {
+        return makeThumb('data:' + file.type + ';base64,' + b64).then(function (thumb) {
+          var att = { name: name, mime: file.type, base64: b64, thumb: thumb, path: null, bytes: file.size };
+          state.attachments.push(att); renderAttachments();
+          // Оригинал — на диск, в папку проекта.
+          return rb('save_attachment', { name: name, base64: b64 }).then(function (r) {
+            if (r && r.ok) { att.path = r.path; att.name = r.path.split(/[\\/]/).pop(); renderAttachments(); }
+            else hint('Не удалось сохранить вложение: ' + (r && r.error));
+          });
+        });
+      }).catch(function (e) { hint('Не удалось прочитать файл: ' + e.message); });
+    });
+  }
+  function renderAttachments() {
+    var box = $('attachments'); if (!box) return;
+    box.innerHTML = '';
+    box.hidden = !state.attachments.length;
+    state.attachments.forEach(function (a, i) {
+      var el = document.createElement('div'); el.className = 'attachment'; el.title = a.name + (a.bytes ? ' · ' + Math.round(a.bytes / 1024) + ' КБ' : '');
+      var img = document.createElement('img'); img.src = a.thumb || ('data:' + a.mime + ';base64,' + a.base64); img.alt = a.name; el.appendChild(img);
+      var nm = document.createElement('div'); nm.className = 'attachment__name'; nm.textContent = a.name; el.appendChild(nm);
+      var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'attachment__remove'; rm.textContent = '✕'; rm.title = 'Убрать';
+      rm.onclick = function () { state.attachments.splice(i, 1); renderAttachments(); };
+      el.appendChild(rm); box.appendChild(el);
+    });
+  }
+  function showImages(msgEl, atts) {
+    var box = document.createElement('div'); box.className = 'msg__images';
+    atts.forEach(function (a) {
+      if (!a.thumb) return;
+      var img = document.createElement('img'); img.src = a.thumb; img.alt = a.name || ''; img.title = a.path || a.name || '';
+      img.onclick = function () {
+        // По клику — оригинал с диска, не миниатюра.
+        if (a.path) rb('read_attachment', { path: a.path }).then(function (r) { if (r && r.ok && window.StultusLightbox) window.StultusLightbox('data:' + (a.mime || 'image/png') + ';base64,' + r.base64, a.name); else if (window.StultusLightbox) window.StultusLightbox(a.thumb, a.name); });
+        else if (window.StultusLightbox) window.StultusLightbox(a.thumb, a.name);
+      };
+      box.appendChild(img);
+    });
+    if (box.children.length) msgEl.appendChild(box);
+  }
+  $('btnAttach').onclick = function () { $('fileInput').click(); };
+  $('fileInput').onchange = function () { addFiles(this.files); this.value = ''; };
+  input.addEventListener('paste', function (e) {
+    var items = e.clipboardData && e.clipboardData.files;
+    if (items && items.length) { e.preventDefault(); addFiles(items); }
+  });
+  document.addEventListener('dragover', function (e) { if (e.dataTransfer && [].slice.call(e.dataTransfer.types).indexOf('Files') >= 0) { e.preventDefault(); app.classList.add('is-drop'); } });
+  document.addEventListener('dragleave', function () { app.classList.remove('is-drop'); });
+  document.addEventListener('drop', function (e) { app.classList.remove('is-drop'); if (e.dataTransfer && e.dataTransfer.files.length) { e.preventDefault(); addFiles(e.dataTransfer.files); } });
 
   // ---------- Копилка приёмов ----------
   function renderRecipes() {

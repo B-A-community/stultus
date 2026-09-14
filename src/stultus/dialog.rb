@@ -92,6 +92,14 @@ module BACommunity
           Scenes.run(p['action'], name: p['name'], description: p['description'])
         end
 
+        register(dialog, 'save_attachment') do |_id, p|
+          Attachments.save(p['name'], p['base64'])
+        end
+
+        register(dialog, 'read_attachment') do |_id, p|
+          Attachments.read(p['path'])
+        end
+
         register(dialog, 'save_accent') do |_id, p|
           History.save_accent(p['accent'])
           { accent: History.accent }

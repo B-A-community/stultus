@@ -36,6 +36,8 @@ export type PluginMessage =
       model?: string
       scene?: unknown
       sessions?: Record<string, string>
+      /** Картинки пользователя — оригиналы, base64. */
+      attachments?: Array<{ name: string; mime: string; base64: string }>
     }
   | { type: 'tool_result'; call_id: string; ok: boolean; content?: string; image?: { mime: string; base64: string }; capture?: ToolResult['capture']; prompt?: string }
   | { type: 'cancel' }
@@ -90,6 +92,9 @@ export class PluginConnection {
   /** Текущий ход — есть ли он и как его прервать. */
   running: { turn: number; cancel: () => void; signal: AbortSignal } | null = null
   toolCalls = 0
+  /** Вызовов инструментов в текущем ходе и был ли ход остановлен пределом. */
+  turnToolCalls = 0
+  budgetStopped = false
 
   private pending = new Map<string, { resolve: (r: ToolResult) => void; timer: NodeJS.Timeout; cleanup: () => void }>()
   private readonly ws: WebSocket
@@ -112,6 +117,18 @@ export class PluginConnection {
     const signal = this.running?.signal
     if (signal?.aborted) return Promise.resolve({ ok: false, content: 'Ход остановлен.' })
     this.toolCalls++
+    this.turnToolCalls++
+    if (config.turnMaxToolCalls > 0 && this.turnToolCalls > config.turnMaxToolCalls && !this.budgetStopped) {
+      // Предел вызовов за ход: спрашиваем человека и обрываем ход.
+      this.budgetStopped = true
+      this.send({
+        type: 'ask',
+        question: `За этот ход уже ${config.turnMaxToolCalls} вызовов инструментов, работа не закончена. Продолжать?`,
+        options: ['Продолжай', 'Хватит, оставь как есть'],
+      })
+      this.running?.cancel()
+      return Promise.resolve({ ok: false, content: 'Предел вызовов за ход исчерпан — пользователь решает, продолжать ли. Закончи ход.' })
+    }
     const call_id = randomUUID()
     const started = Date.now()
     const label = typeof args.label === 'string' ? args.label : typeof args.reason === 'string' ? args.reason : ''

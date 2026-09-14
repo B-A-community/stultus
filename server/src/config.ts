@@ -87,4 +87,11 @@ export const config = {
    * Пока только для Claude: Codex отдаёт расход лишь по концу хода.
    */
   turnTokenBudget: Number(process.env.TURN_TOKEN_BUDGET ?? 400_000),
+
+  /**
+   * Предел вызовов инструментов за один ход — для Codex (расход он сообщает
+   * только по концу хода) и как вторая страховка для Claude. По достижении
+   * ход прерывается вопросом «продолжать?». 0 — без предела.
+   */
+  turnMaxToolCalls: Number(process.env.TURN_MAX_TOOL_CALLS ?? 60),
 }

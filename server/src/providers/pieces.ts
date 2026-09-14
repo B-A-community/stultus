@@ -23,6 +23,8 @@ export interface RunInput {
   model: string
   /** Идентификатор сессии провайдера из прошлого хода, если есть. */
   resume?: string
+  /** Картинки пользователя (оригиналы). */
+  attachments?: Array<{ name: string; mime: string; base64: string }>
   /** Прервать ход. */
   signal: AbortSignal
 }
