@@ -113,13 +113,14 @@ module BACommunity
         { ok: false, error: "#{e.class}: #{e.message}", state: final_state }
       end
 
-      # Сохранить кадр по пути пользователя. Существующая папка или путь со
-      # слешем на конце → файл stultus_vray_<дата>.png в ней; иначе это файл,
-      # расширение .png добавляется, если его нет.
+      # Сохранить кадр по пути пользователя. Файл — только с расширением
+      # (.png/.jpg); всё остальное (существующая папка, слеш на конце, путь без
+      # расширения) — папка, которая создаётся, с файлом stultus_vray_<дата>.png.
+      # «В папку …» говорят куда чаще, чем имя файла без расширения.
       def save_copy(result, save_to)
         raw = save_to.to_s.strip
         path = File.expand_path(raw.tr('\\', '/'))
-        if File.directory?(path) || raw.end_with?('/', '\\')
+        if File.directory?(path) || raw.end_with?('/', '\\') || File.extname(path).empty?
           FileUtils.mkdir_p(path)
           path = File.join(path, "stultus_vray_#{Time.now.strftime('%Y%m%d_%H%M%S')}.png")
         else
