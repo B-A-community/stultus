@@ -79,7 +79,8 @@
     usage: null,
     selection: null,   // { count, text, by_type, definitions } — живое выделение из SketchUp
     archive: null,     // { count, at } — удалённая переписка, которую можно вернуть
-    turnOps: 0,        // сколько execute_ruby было в текущем ходе — первый создаёт пункт Undo
+    turnOps: 0,        // сколько успешных execute_ruby было в текущем ходе
+    turnOpened: false, // открыт ли пункт Undo этого хода (первый успешный вызов)
     turnLabel: '',
     recipes: [],       // копилка приёмов с gateway
     accent: 'lime',    // цвет этого окна (хранится в файле модели)
@@ -380,6 +381,7 @@
     setBusy(true);
     state.turn += 1;
     state.turnOps = 0;
+    state.turnOpened = false;
     state.turnLabel = text.replace(/\s+/g, ' ').slice(0, 50);
     startCurrent(provider);
 
@@ -713,10 +715,12 @@
     var el = addTool(msg);
     var run;
     if (msg.name === 'execute_ruby') {
-      // Первый вызов хода — пункт Undo с именем задания, остальные сливаются в него.
-      var first = state.turnOps === 0;
-      state.turnOps += 1;
-      run = rb('execute_ruby', { code: msg.args.code, label: first ? 'Ход: ' + (state.turnLabel || msg.args.label || '') : msg.args.label, transparent: !first });
+      // Первый УСПЕШНЫЙ вызов хода открывает пункт Undo с именем задания,
+      // остальные сливаются в него. Упавший вызов пункт не открывает: иначе
+      // следующий стал бы прозрачным и слился с предыдущим ходом.
+      var first = !state.turnOpened;
+      run = rb('execute_ruby', { code: msg.args.code, label: first ? 'Ход: ' + (state.turnLabel || msg.args.label || '') : msg.args.label, transparent: !first })
+        .then(function (result) { if (result && result.ok !== false) { state.turnOpened = true; state.turnOps += 1; } return result; });
     }
     else if (msg.name === 'scenes') run = rb('scenes', msg.args || {});
     else if (msg.name === 'get_scene') run = rb('scene_state', { full: true });

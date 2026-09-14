@@ -164,7 +164,7 @@ function build(conn: PluginConnection): McpServer {
         width: z.number().int().min(64).max(8192).optional().describe('Ширина, px (по умолчанию 1280)'),
         height: z.number().int().min(64).max(8192).optional().describe('Высота, px (по умолчанию 720)'),
         preset: z.enum(['draft', 'medium', 'high']).optional().describe('Качество: draft для проверки, high для финала'),
-        save_path: z.string().max(500).optional().describe('Куда сохранить PNG на компьютере пользователя: файл .png или папка (имя подставится). Без него кадр только показывается'),
+        save_path: z.string().max(500).optional().describe('Куда сохранить на компьютере пользователя: путь с расширением .png — файл; без расширения — папка (создаётся, имя файла подставится). Без него кадр только показывается'),
       },
     },
     async ({ width, height, preset, save_path }) => {
