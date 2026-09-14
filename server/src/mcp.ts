@@ -24,7 +24,7 @@ export const MCP_SERVER_NAME = 'stultus'
 export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'render_vray', 'scenes', 'save_recipe', 'get_recipe', 'undo', 'ask_user'] as const
 
 function build(conn: PluginConnection): McpServer {
-  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.1.0' })
+  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.9' })
 
   server.registerTool('render_viewport', {
     title: 'Визуализация текущего кадра',

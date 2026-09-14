@@ -8,7 +8,7 @@ import { handleMcp } from './mcp.ts'
 import { deleteRecipe, listRecipes } from './recipes.ts'
 import { renderConfigured } from './render.ts'
 
-const VERSION = '0.1.0'
+const VERSION = '0.2.9'
 
 /** Живые окна SketchUp по id соединения. */
 const connections = new Map<string, PluginConnection>()

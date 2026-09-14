@@ -30,10 +30,13 @@
 .suggestion span,.btn--primary,.render__save,.card__options .btn{font-variant-emoji:text}
 .suggestion span{font-family:"Segoe UI Symbol","Segoe UI",sans-serif}
 /* Вложения: скрепка слева от поля, миниатюры над ним. Модели уходит оригинал. */
-.composer__input{display:flex;align-items:flex-start;gap:8px}
-.composer__attach{flex:none;width:28px;height:28px;margin-top:2px;color:var(--quiet)}
+.composer__attach{flex:none;width:26px;height:26px;color:var(--quiet)}
 .composer__attach:hover{color:var(--text)}
-.composer__input textarea{flex:1}
+.composer__attach svg{width:15px;height:15px}
+/* Строка контекста — чуть ниже и правее, скрепка занимает освободившийся левый край. */
+.composer__context{margin-left:10px;transform:translateY(2px)}
+/* Имя файла — под логотипом, с левого края. */
+.topbar__model{left:0}
 .attachments{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
 .attachment{position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--raised)}
 .attachment img{width:100%;height:100%;object-fit:cover;display:block}

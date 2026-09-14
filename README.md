@@ -4,7 +4,7 @@
 окне плагина, модель (Claude Code или Codex) строит и правит геометрию через
 Ruby API, видит состояние сцены и — с вашего согласия — снимок вьюпорта.
 
-Версия 0.1.0 · лицензия [Apache 2.0](LICENSE) · © 2026 B&A community
+Версия 0.2.9 · лицензия [Apache 2.0](LICENSE) · © 2026 B&A community
 
 Создатели: [maksarsanjeev](https://github.com/maksarsanjeev),
 [Royalb21](https://github.com/Royalb21) — см. [AUTHORS](AUTHORS).
@@ -81,7 +81,7 @@ Gateway принимает окна SketchUp и для каждого подни
 
 ### Плагин (рабочая машина)
 
-1. `tools\build_rbz.ps1` → `build\Stultus-0.1.0.rbz`, установить через
+1. `tools\build_rbz.ps1` → `build\Stultus-0.2.9.rbz`, установить через
    Extension Manager. Для разработки — `dev_install.ps1` (копирует `src\` в
    Plugins SketchUp 2024) и перезапуск SketchUp.
 2. Extensions → Stultus — чат с ИИ → ⚙ → адрес gateway
