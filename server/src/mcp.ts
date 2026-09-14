@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
 import type { PluginConnection } from './connection.ts'
+import { getRecipe, listRecipes, saveRecipe } from './recipes.ts'
 import { randomUUID } from 'node:crypto'
 import { pngImage, renderConfigured, renderViewport } from './render.ts'
 
@@ -20,7 +21,7 @@ import { pngImage, renderConfigured, renderViewport } from './render.ts'
 export const MCP_SERVER_NAME = 'stultus'
 
 /** Что модель называет в описаниях — единый источник для обоих провайдеров. */
-export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'render_vray', 'undo', 'ask_user'] as const
+export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'render_vray', 'scenes', 'save_recipe', 'get_recipe', 'undo', 'ask_user'] as const
 
 function build(conn: PluginConnection): McpServer {
   const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.1.0' })
@@ -173,6 +174,71 @@ function build(conn: PluginConnection): McpServer {
       const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [{ type: 'text', text: r.content }]
       if (r.image) content.push({ type: 'image', data: r.image.base64, mimeType: r.image.mime })
       return { content, isError: !r.ok }
+    },
+  )
+
+  server.registerTool(
+    'scenes',
+    {
+      title: 'Сцены SketchUp',
+      description:
+        'Сцены (Pages) модели: list — перечислить с текущей; activate — перейти к сцене (камера, слои); ' +
+        'add — сохранить текущий вид новой сценой; update — обновить сцену текущим видом; delete — удалить. ' +
+        'Для пакетного рендера: activate каждую сцену, затем render_vray с save_path.',
+      inputSchema: {
+        action: z.enum(['list', 'activate', 'add', 'update', 'delete']),
+        name: z.string().max(200).optional().describe('Имя сцены (кроме list)'),
+        description: z.string().max(500).optional().describe('Описание для add'),
+      },
+    },
+    async ({ action, name, description }) => {
+      const r = await conn.callTool('scenes', { action, name, description })
+      return { content: [{ type: 'text', text: r.content }], isError: !r.ok }
+    },
+  )
+
+  server.registerTool(
+    'save_recipe',
+    {
+      title: 'Сохранить приём в копилку',
+      description:
+        'Сохраняет проверенный приём (универсальный Ruby-код с параметрами) в общую копилку бюро. ' +
+        'Только по просьбе пользователя «запомнить», после опроса через ask_user о параметрах и названии. ' +
+        'Код — Ruby для execute_ruby с плейсхолдерами {{имя_параметра}}; в описании — когда приём подходит.',
+      inputSchema: {
+        name: z.string().min(2).max(80).describe('Короткое имя по-русски, например «Лестница двухмаршевая»'),
+        description: z.string().min(5).max(600).describe('Что делает и когда применять'),
+        params: z
+          .array(z.object({
+            name: z.string().min(1).max(40).describe('имя плейсхолдера без скобок'),
+            description: z.string().max(200).optional(),
+            default: z.union([z.string(), z.number(), z.boolean()]).optional(),
+          }))
+          .max(20)
+          .optional(),
+        code: z.string().min(10).max(20000).describe('Ruby-код с {{плейсхолдерами}}'),
+        tags: z.array(z.string().max(30)).max(8).optional(),
+      },
+    },
+    async ({ name, description, params, code, tags }) => {
+      const r = saveRecipe({ name, description, params: params ?? [], code, tags: tags ?? [] })
+      conn.send({ type: 'recipes', recipes: listRecipes() })
+      return { content: [{ type: 'text', text: `Приём «${r.name}» сохранён в копилке (id ${r.id}). Всего приёмов: ${listRecipes().length}.` }] }
+    },
+  )
+
+  server.registerTool(
+    'get_recipe',
+    {
+      title: 'Взять приём из копилки',
+      description: 'Возвращает полный приём (описание, параметры, Ruby-код с плейсхолдерами) по имени. Подставь значения и выполни через execute_ruby.',
+      inputSchema: { name: z.string().min(1).max(80) },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ name }) => {
+      const r = getRecipe(name)
+      if (!r) return { content: [{ type: 'text', text: `Приёма «${name}» нет. Есть: ${listRecipes().map((x) => x.name).join(', ') || 'копилка пуста'}.` }], isError: true }
+      return { content: [{ type: 'text', text: JSON.stringify({ name: r.name, description: r.description, params: r.params, code: r.code, tags: r.tags }, null, 1) }] }
     },
   )
 

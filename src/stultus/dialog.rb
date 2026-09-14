@@ -64,7 +64,8 @@ module BACommunity
             sessions:  History.sessions,
             instance:  instance_info,
             selection: Selection.summary,
-            archive:   History.archive_info
+            archive:   History.archive_info,
+            accent:    History.accent
           }
         end
 
@@ -78,7 +79,22 @@ module BACommunity
         end
 
         register(dialog, 'execute_ruby') do |_id, p|
-          Runner.execute(p['code'], label: p['label'])
+          Runner.execute(
+            p['code'],
+            label:       p['label'],
+            # Второй и дальше вызовы хода — прозрачные операции: один Undo на ход.
+            transparent: p['transparent'] ? true : false,
+            timeout:     Settings.all['ruby_timeout'].to_f
+          )
+        end
+
+        register(dialog, 'scenes') do |_id, p|
+          Scenes.run(p['action'], name: p['name'], description: p['description'])
+        end
+
+        register(dialog, 'save_accent') do |_id, p|
+          History.save_accent(p['accent'])
+          { accent: History.accent }
         end
 
         register(dialog, 'undo') { |_id, _p| Runner.undo }
@@ -227,6 +243,8 @@ module BACommunity
           pid:         Process.pid,
           model_title: m.title.to_s.empty? ? 'Untitled' : m.title,
           model_path:  m.path.to_s.empty? ? nil : m.path,
+          # Имя файла для шапки окна; несохранённая модель — так и говорим.
+          model_file:  m.path.to_s.empty? ? nil : File.basename(m.path),
           model_guid:  m.guid,
           # Какие рендереры доступны в этом SketchUp — gateway по ним решает,
           # выдавать ли модели инструмент render_vray и что писать в подсказку.

@@ -39,6 +39,7 @@ export type PluginMessage =
     }
   | { type: 'tool_result'; call_id: string; ok: boolean; content?: string; image?: { mime: string; base64: string }; capture?: ToolResult['capture']; prompt?: string }
   | { type: 'cancel' }
+  | { type: 'recipe_delete'; id: string }
 
 /** Сообщения gateway → плагин. */
 export type GatewayMessage =
@@ -54,6 +55,7 @@ export type GatewayMessage =
   | { type: 'done'; usage?: Usage }
   | { type: 'error'; message: string }
   | { type: 'render_status'; id: string; text: string; failed?: boolean }
+  | { type: 'recipes'; recipes: import('./recipes.ts').Recipe[] }
   | { type: 'render_result'; id: string; prompt: string; source: import('./render.ts').RenderImage; image: import('./render.ts').RenderImage }
 
 export interface ProviderInfo {

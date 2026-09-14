@@ -5,6 +5,7 @@ import { providerList, runChat } from './chat.ts'
 import { config } from './config.ts'
 import { PluginConnection, type PluginMessage } from './connection.ts'
 import { handleMcp } from './mcp.ts'
+import { deleteRecipe, listRecipes } from './recipes.ts'
 import { renderConfigured } from './render.ts'
 
 const VERSION = '0.1.0'
@@ -100,6 +101,7 @@ wss.on('connection', (ws) => {
       conn.sessions = { ...(msg.sessions ?? {}) }
       console.log(`[ws] ${conn.id.slice(0, 8)}: ${conn.instance.model_title ?? '?'} · SketchUp ${conn.instance.app_version ?? '?'} · плагин ${conn.instance.plugin ?? '?'}`)
       conn.send({ type: 'welcome', version: VERSION, providers: providerList() })
+      conn.send({ type: 'recipes', recipes: listRecipes() })
       return
     }
     if (!conn.authed) {
@@ -115,6 +117,11 @@ wss.on('connection', (ws) => {
         break
       case 'cancel':
         conn.running?.cancel()
+        break
+      case 'recipe_delete':
+        deleteRecipe(msg.id)
+        // Копилка общая: обновить у всех подключённых окон.
+        for (const c of connections.values()) c.send({ type: 'recipes', recipes: listRecipes() })
         break
     }
   })

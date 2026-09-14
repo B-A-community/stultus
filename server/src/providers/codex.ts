@@ -4,7 +4,7 @@ import { Codex } from '@openai/codex-sdk'
 import { config } from '../config.ts'
 import type { PluginConnection } from '../connection.ts'
 import { MCP_SERVER_NAME, TOOL_NAMES } from '../mcp.ts'
-import { AGENTS_MD } from '../prompt.ts'
+import { agentsMd } from '../prompt.ts'
 import type { Piece, RunInput } from './pieces.ts'
 
 /**
@@ -27,7 +27,7 @@ function ensureWorkDir(): string {
   const dir = join(config.workDir, 'codex')
   mkdirSync(dir, { recursive: true })
   const agents = join(dir, 'AGENTS.md')
-  writeFileSync(agents, AGENTS_MD)
+  writeFileSync(agents, agentsMd())
   return dir
 }
 

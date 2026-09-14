@@ -17,7 +17,12 @@ module BACommunity
         'provider' => 'claude',
         'model'    => '',
         # Снимок сцены прикладывается к каждому сообщению пользователя.
-        'attach_scene' => true
+        'attach_scene' => true,
+        # Тема окна: dark | light (дизайн светлой — от ChatGPT, пока заглушка).
+        'theme' => 'dark',
+        # Лимит времени execute_ruby, секунд; 0 — без лимита. См. Runner: может
+        # вызывать нестабильность при прерывании посреди вызова API.
+        'ruby_timeout' => 90
       }.freeze
 
       module_function

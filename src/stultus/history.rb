@@ -24,6 +24,7 @@ module BACommunity
       KEY_HISTORY  = 'history'
       KEY_SESSIONS = 'sessions'
       KEY_ARCHIVE  = 'archive'
+      KEY_ACCENT   = 'accent'
       KEY_VERSION  = 'version'
 
       module_function
@@ -96,6 +97,16 @@ module BACommunity
         { restored: archived.length, messages: load, sessions: sess }
       rescue JSON::ParserError
         { restored: 0, messages: load, sessions: sessions }
+      end
+
+      # Цвет плагина для этой модели: у каждого открытого файла свой, чтобы
+      # окна не путались. Хранится в файле модели.
+      def accent
+        read(KEY_ACCENT)
+      end
+
+      def save_accent(value)
+        write(KEY_ACCENT, value.to_s)
       end
 
       # Идентификаторы сессий провайдеров: { 'claude' => 'uuid', 'codex' => 'thread' }.

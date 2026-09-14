@@ -1,0 +1,26 @@
+/* Дополнения к Graphite: палитра цвета окна, копилка приёмов, кнопка «Запомнить приём».
+   Светлая тема — временные токены до дизайна от ChatGPT (заменить целиком). */
+.topbar__actions{position:relative}
+.accent{position:absolute;top:36px;right:0;z-index:30;display:flex;gap:6px;padding:8px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 30px #0006}
+.accent__swatch{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+.accent__swatch[aria-pressed=true]{border-color:var(--text)}
+.accent__swatch:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+.msg__actions{margin-top:8px;display:flex;gap:6px}
+.msg__remember{font-size:11px;padding:4px 9px}
+.recipes__list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.recipe{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--raised)}
+.recipe__head{display:flex;align-items:baseline;gap:8px}
+.recipe__name{font-weight:600;flex:1}
+.recipe__meta{font:10px var(--mono);color:var(--quiet);letter-spacing:.5px}
+.recipe__desc{font-size:12px;color:var(--muted);margin:6px 0}
+.recipe__params{font-size:12px;margin:6px 0;padding-left:18px}
+.recipe details{margin-top:6px}.recipe summary{cursor:pointer;font-size:11px;color:var(--quiet)}
+.recipe pre{margin:6px 0 0;max-height:220px}
+.recipe__actions{display:flex;gap:6px;margin-top:8px}
+.recipe__actions .btn{font-size:11px;padding:4px 9px}
+.recipes__empty{color:var(--muted);font-size:12px;padding:12px 0}
+[data-theme=light]{--bg:#f3f3ee;--surface:#ffffff;--raised:#e9eae3;--line:#d3d6cd;--text:#1d201c;--muted:#5d645b;--quiet:#8a9088;--accent-ink:#1d201c}
+[data-theme=light] .provider{background:#eeeee8;border-bottom-color:#dcdfd6}
+[data-theme=light] pre{background:#f7f7f2;color:#333a31}
+[data-theme=light] .settings__panel{background:#ffffff}
+[data-theme=light] .msg--user{border-color:#d3d6cd}

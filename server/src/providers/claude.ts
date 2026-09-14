@@ -5,7 +5,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk'
 import { config } from '../config.ts'
 import type { PluginConnection } from '../connection.ts'
 import { MCP_SERVER_NAME } from '../mcp.ts'
-import { SYSTEM_PROMPT } from '../prompt.ts'
+import { systemPrompt } from '../prompt.ts'
 import type { Piece, RunInput } from './pieces.ts'
 
 /**
@@ -37,7 +37,7 @@ export async function* runClaude(conn: PluginConnection, input: RunInput): Async
     prompt: input.prompt,
     options: {
       model: input.model,
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt: systemPrompt(),
       // Сводка размышлений — в ленту окна: по умолчанию текст размышлений
       // не возвращается вовсе (display omitted), и строка «думает…» пуста.
       thinking: { type: 'adaptive', display: 'summarized' },
@@ -72,8 +72,27 @@ export async function* runClaude(conn: PluginConnection, input: RunInput): Async
   }
   input.signal.addEventListener('abort', onAbort, { once: true })
 
+  // Мягкий ограничитель: расход копится по сообщениям модели, и при
+  // превышении ход прерывается вопросом. Решает человек, а не счётчик.
+  let spent = 0
+  let budgetStop = false
+
   try {
     for await (const message of run) {
+      if (message.type === 'assistant' && config.turnTokenBudget > 0 && !budgetStop) {
+        const u = (message.message as { usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } } | undefined)?.usage
+        if (u) spent += (u.input_tokens ?? 0) + (u.output_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
+        if (spent > config.turnTokenBudget) {
+          budgetStop = true
+          await run.interrupt().catch(() => {})
+          yield {
+            kind: 'ask',
+            question: `Потрачено ${(spent / 1000).toFixed(0)}k токенов за этот ход — предел ${(config.turnTokenBudget / 1000).toFixed(0)}k. Работа не закончена. Продолжать?`,
+            options: ['Продолжай', 'Хватит, оставь как есть'],
+          }
+          break
+        }
+      }
       if (message.type === 'system' && message.subtype === 'init') {
         yield { kind: 'session', id: message.session_id }
         console.log(`[claude] просили ${input.model}, работает ${message.model}${input.resume ? ', сессия продолжена' : ''}`)

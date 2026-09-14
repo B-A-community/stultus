@@ -20,6 +20,7 @@
 # в описании инструмента — модель должна дробить тяжёлые построения.
 
 require 'stringio'
+require 'timeout'
 
 module BACommunity
   module Stultus
@@ -33,7 +34,20 @@ module BACommunity
       # инструменты плагина.
       NATIVE_GUARD = /\b(VRay|Enscape)\b|Fiddle|dlopen/.freeze
 
-      def execute(code, label: nil)
+      # Ошибка лимита времени: своя, чтобы её не перехватил rescue внутри кода модели.
+      class TimeLimit < Exception; end # rubocop:disable Lint/InheritException
+
+      # transparent: true — операция сливается с предыдущим пунктом Undo. Так
+      # весь ход модели (5–10 вызовов) откатывается одним Ctrl+Z: первый вызов
+      # хода создаёт пункт с именем задания, остальные прячутся в него.
+      #
+      # timeout (секунды, 0 = без лимита). ВНИМАНИЕ: прерывание идёт через
+      # Timeout из другого потока Ruby и может сработать посреди вызова
+      # SketchUp API. Модель откатывается abort_operation, но состояние
+      # SketchUp после такого прерывания не гарантировано — возможны
+      # нестабильность и вылеты. Лимит защищает от «поиска по всему диску»
+      # и бесконечных циклов, а не от тяжёлой честной геометрии.
+      def execute(code, label: nil, transparent: false, timeout: 0)
         code = code.to_s
         return { ok: false, error: 'Пустой код' } if code.strip.empty?
         if code =~ NATIVE_GUARD
@@ -50,14 +64,29 @@ module BACommunity
         $stdout = captured
         name = label.to_s.strip.empty? ? "#{PLUGIN_NAME}: ИИ" : "#{PLUGIN_NAME}: #{label.to_s.strip[0, 60]}"
 
-        model.start_operation(name, true)
+        model.start_operation(name, true, false, transparent ? true : false)
+        started = Time.now
         begin
-          result = eval(code, TOPLEVEL_BINDING, '(stultus)', 1) # rubocop:disable Security/Eval
+          result = if timeout.to_f > 0
+                     Timeout.timeout(timeout.to_f, TimeLimit) { eval(code, TOPLEVEL_BINDING, '(stultus)', 1) } # rubocop:disable Security/Eval
+                   else
+                     eval(code, TOPLEVEL_BINDING, '(stultus)', 1) # rubocop:disable Security/Eval
+                   end
           model.commit_operation
           {
-            ok:     true,
-            result: truncate(safe_inspect(result)),
-            output: truncate(captured.string)
+            ok:      true,
+            result:  truncate(safe_inspect(result)),
+            output:  truncate(captured.string),
+            seconds: (Time.now - started).round(2)
+          }
+        rescue TimeLimit
+          model.abort_operation
+          {
+            ok:      false,
+            error:   "Превышен лимит времени #{timeout.to_f.round} с: код прерван, операция откачена. "                      'Не ищи по диску и не жди в циклах; тяжёлое построение раздели на части.',
+            output:  truncate(captured.string),
+            seconds: (Time.now - started).round(2),
+            timed_out: true
           }
         rescue StandardError, ScriptError => e
           model.abort_operation
@@ -65,7 +94,8 @@ module BACommunity
             ok:        false,
             error:     "#{e.class}: #{e.message}",
             backtrace: Array(e.backtrace).first(6),
-            output:    truncate(captured.string)
+            output:    truncate(captured.string),
+            seconds:   (Time.now - started).round(2)
           }
         ensure
           $stdout = old_stdout

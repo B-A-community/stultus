@@ -124,6 +124,10 @@ export async function runChat(conn: PluginConnection, msg: Extract<PluginMessage
         case 'thinking':
           conn.send({ type: 'thinking', delta: piece.text })
           break
+        case 'ask':
+          produced = true
+          conn.send({ type: 'ask', question: piece.question, options: piece.options })
+          break
         case 'session':
           conn.sessions[msg.provider] = piece.id
           conn.send({ type: 'session', provider: msg.provider, id: piece.id })

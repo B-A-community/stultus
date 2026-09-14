@@ -77,4 +77,14 @@ export const config = {
 
   /** Рабочий каталог для процессов моделей (там же AGENTS.md для Codex). */
   workDir: process.env.WORK_DIR ?? `${process.cwd()}/data/work`,
+
+  /** Файл копилки приёмов (общий для бюро). */
+  recipesPath: process.env.RECIPES_PATH ?? `${process.cwd()}/data/recipes.json`,
+
+  /**
+   * Мягкий ограничитель расхода на один ход, токенов (ввод + вывод, с кэшем).
+   * По достижении ход прерывается вопросом «продолжать?». 0 — без лимита.
+   * Пока только для Claude: Codex отдаёт расход лишь по концу хода.
+   */
+  turnTokenBudget: Number(process.env.TURN_TOKEN_BUDGET ?? 400_000),
 }

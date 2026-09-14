@@ -78,8 +78,17 @@
     current: null,     // текущий ответ: {el, bodyEl, text, tools:[]}
     usage: null,
     selection: null,   // { count, text, by_type, definitions } — живое выделение из SketchUp
-    archive: null      // { count, at } — удалённая переписка, которую можно вернуть
+    archive: null,     // { count, at } — удалённая переписка, которую можно вернуть
+    turnOps: 0,        // сколько execute_ruby было в текущем ходе — первый создаёт пункт Undo
+    turnLabel: '',
+    recipes: []        // копилка приёмов с gateway
   };
+
+  // Десять цветов окна: свой у каждой открытой модели, чтобы окна не путались.
+  var ACCENTS = [
+    ['lime', '#d6f58a'], ['amber', '#f5c76a'], ['coral', '#f0917f'], ['rose', '#f0a3cb'], ['violet', '#bfa6f2'],
+    ['blue', '#8fb8f5'], ['cyan', '#7fd9e0'], ['mint', '#8fe3b4'], ['sand', '#e3d2a3'], ['grey', '#c9cdc5']
+  ];
 
   var $ = function (id) { return document.getElementById(id); };
   var app = $('app'), chat = $('chat'), input = $('input');
@@ -156,6 +165,7 @@
     if (call.name === 'render_vray') return 'Рендер V-Ray ' + (a.width || 1280) + '×' + (a.height || 720) + (a.preset ? ' · ' + a.preset : '');
     if (call.name === 'ask_user') return a.question || '';
     if (call.name === 'select') return a.mode === 'clear' ? 'снять выделение' : 'выделить ' + ((a.ids || []).length) + ' объект(ов)';
+    if (call.name === 'scenes') return 'сцены: ' + (a.action || 'list') + (a.name ? ' «' + a.name + '»' : '');
     return '';
   }
 
@@ -287,13 +297,18 @@
         onToolCall(msg);
         break;
       case 'ask':
-        onAsk(msg);
+        // Вопрос от gateway (ограничитель расхода) приходит в старой форме.
+        onAsk({ questions: msg.questions || [{ question: msg.question, options: msg.options }] });
         break;
       case 'session':
         if (msg.provider && msg.id) { state.sessions[msg.provider] = msg.id; persistSessions(); }
         break;
       case 'done':
         onDone(msg);
+        break;
+      case 'recipes':
+        state.recipes = msg.recipes || [];
+        renderRecipes();
         break;
       case 'error':
         finishCurrent();
@@ -358,6 +373,8 @@
     state.messages.push({ role: 'user', text: text, at: new Date().toISOString() });
     setBusy(true);
     state.turn += 1;
+    state.turnOps = 0;
+    state.turnLabel = text.replace(/\s+/g, ' ').slice(0, 50);
     startCurrent(provider);
 
     // Выделение уходит всегда: это то, о чём пользователь говорит «это».
@@ -476,6 +493,7 @@
     finishCurrent();
     setBusy(false);
     hint('');
+    offerRemember();
     if (msg.usage) {
       state.usage = msg.usage;
       var u = msg.usage;
@@ -486,6 +504,74 @@
   }
 
   function fmt(n) { return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n); }
+
+  // «Запомнить приём»: под последним ответом модели, если в ходе были
+  // изменения модели. Нажатие просит модель опросить пользователя и сохранить
+  // приём в копилку через инструмент save_recipe.
+  function offerRemember() {
+    if (state.turnOps === 0) return;
+    var bubbles = chat.querySelectorAll('.msg--assistant');
+    var last = bubbles[bubbles.length - 1];
+    if (!last || last.querySelector('.msg__actions')) return;
+    var box = document.createElement('div'); box.className = 'msg__actions';
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'btn msg__remember'; b.textContent = 'Запомнить приём';
+    b.onclick = function () {
+      if (state.busy) return;
+      box.remove();
+      input.value = 'Запомни это действие как приём в копилку. Сначала спроси меня через ask_user обо всём, что надо сделать параметрами (размеры, место, количество, материал, имена), и о названии приёма, потом сохрани через save_recipe.';
+      sendChat();
+    };
+    box.appendChild(b); last.appendChild(box); scrollDown();
+  }
+
+  // ---------- Копилка приёмов ----------
+  function renderRecipes() {
+    var list = $('recipesList'); if (!list) return;
+    list.innerHTML = '';
+    if (!state.recipes.length) { var e = document.createElement('div'); e.className = 'recipes__empty'; e.textContent = 'Пока пусто. После удачного действия нажмите «Запомнить приём» под ответом модели.'; list.appendChild(e); return; }
+    state.recipes.forEach(function (r) {
+      var el = document.createElement('div'); el.className = 'recipe';
+      var head = document.createElement('div'); head.className = 'recipe__head';
+      var name = document.createElement('span'); name.className = 'recipe__name'; name.textContent = r.name;
+      var meta = document.createElement('span'); meta.className = 'recipe__meta'; meta.textContent = (r.at || '').slice(0, 10) + (r.uses ? ' · ' + r.uses + '×' : '');
+      head.appendChild(name); head.appendChild(meta); el.appendChild(head);
+      if (r.description) { var d = document.createElement('div'); d.className = 'recipe__desc'; d.textContent = r.description; el.appendChild(d); }
+      if (r.params && r.params.length) {
+        var ul = document.createElement('ul'); ul.className = 'recipe__params';
+        r.params.forEach(function (p) { var li = document.createElement('li'); li.textContent = p.name + (p.default != null ? ' = ' + p.default : '') + (p.description ? ' — ' + p.description : ''); ul.appendChild(li); });
+        el.appendChild(ul);
+      }
+      if (r.code) { var det = document.createElement('details'); var sm = document.createElement('summary'); sm.textContent = 'код'; var pre = document.createElement('pre'); pre.textContent = r.code; det.appendChild(sm); det.appendChild(pre); el.appendChild(det); }
+      var acts = document.createElement('div'); acts.className = 'recipe__actions';
+      var use = document.createElement('button'); use.type = 'button'; use.className = 'btn'; use.textContent = 'Применить';
+      use.onclick = function () { $('recipes').hidden = true; input.value = 'Примени приём «' + r.name + '» из копилки.'; input.focus(); };
+      var del = document.createElement('button'); del.type = 'button'; del.className = 'btn btn--danger'; del.textContent = 'Удалить';
+      del.onclick = function () { if (confirm('Удалить приём «' + r.name + '» из копилки?')) send({ type: 'recipe_delete', id: r.id }); };
+      acts.appendChild(use); acts.appendChild(del); el.appendChild(acts);
+      list.appendChild(el);
+    });
+  }
+
+  // ---------- Тема и цвет окна ----------
+  function applyTheme(theme) {
+    app.dataset.theme = theme === 'light' ? 'light' : 'dark';
+  }
+  function applyAccent(id) {
+    var found = ACCENTS.filter(function (a) { return a[0] === id; })[0] || ACCENTS[0];
+    document.documentElement.style.setProperty('--accent', found[1]);
+    var picker = $('accentPicker');
+    if (picker) picker.querySelectorAll('.accent__swatch').forEach(function (s) { s.setAttribute('aria-pressed', String(s.dataset.accent === found[0])); });
+  }
+  function buildAccentPicker() {
+    var picker = $('accentPicker'); if (!picker) return;
+    picker.innerHTML = '';
+    ACCENTS.forEach(function (a) {
+      var s = document.createElement('button'); s.type = 'button'; s.className = 'accent__swatch'; s.dataset.accent = a[0];
+      s.style.background = a[1]; s.title = a[0]; s.setAttribute('aria-pressed', 'false');
+      s.onclick = function () { applyAccent(a[0]); picker.hidden = true; rb('save_accent', { accent: a[0] }).catch(function () {}); };
+      picker.appendChild(s);
+    });
+  }
 
   // ---------- Инструменты -------------------------------------------------
   function onToolCall(msg) {
@@ -503,7 +589,13 @@
 
     var el = addTool(msg);
     var run;
-    if (msg.name === 'execute_ruby') run = rb('execute_ruby', { code: msg.args.code, label: msg.args.label });
+    if (msg.name === 'execute_ruby') {
+      // Первый вызов хода — пункт Undo с именем задания, остальные сливаются в него.
+      var first = state.turnOps === 0;
+      state.turnOps += 1;
+      run = rb('execute_ruby', { code: msg.args.code, label: first ? 'Ход: ' + (state.turnLabel || msg.args.label || '') : msg.args.label, transparent: !first });
+    }
+    else if (msg.name === 'scenes') run = rb('scenes', msg.args || {});
     else if (msg.name === 'get_scene') run = rb('scene_state', { full: true });
     else if (msg.name === 'select') run = rb('select', msg.args || {});
     else if (msg.name === 'render_vray') run = rb('render_vray', msg.args || {});
@@ -716,6 +808,16 @@
       hint(r.restored ? 'Восстановлено сообщений: ' + r.restored : '');
     });
   }
+  $('btnTheme').onclick = function () {
+    var next = app.dataset.theme === 'light' ? 'dark' : 'light';
+    applyTheme(next); state.settings.theme = next;
+    rb('save_settings', { settings: { theme: next } }).catch(function () {});
+  };
+  $('btnAccent').onclick = function (e) { e.stopPropagation(); var p = $('accentPicker'); p.hidden = !p.hidden; };
+  document.addEventListener('click', function (e) { var p = $('accentPicker'); if (p && !p.hidden && !p.contains(e.target)) p.hidden = true; });
+  $('btnRecipes').onclick = function () { renderRecipes(); $('recipes').hidden = false; };
+  $('btnCloseRecipes').onclick = function () { $('recipes').hidden = true; };
+  $('recipes').addEventListener('keydown', function (e) { if (e.key === 'Escape') $('recipes').hidden = true; });
   $('btnClearHistory').onclick = clearHistory;
   $('btnNew').onclick = clearHistory;
   $('btnRestore').onclick = restoreArchive;
@@ -729,7 +831,13 @@
       state.settings = r.settings || {};
       state.instance = r.instance || null;
       state.sessions = r.sessions || {};
-      $('modelTitle').textContent = state.instance ? state.instance.model_title : '';
+      // В шапке — имя файла; несохранённая модель — так и говорим, с путём в подсказке.
+      var mt = $('modelTitle');
+      mt.textContent = state.instance ? (state.instance.model_file || 'Файл не сохранён') : '';
+      mt.title = state.instance && state.instance.model_path ? state.instance.model_path : 'Модель ещё не сохранена в файл';
+      buildAccentPicker();
+      applyTheme(state.settings.theme);
+      applyAccent(r.accent || 'lime');
       $('attachScene').checked = state.settings.attach_scene !== false;
       state.selection = r.selection || null;
       renderContext();

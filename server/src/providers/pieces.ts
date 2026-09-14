@@ -12,6 +12,8 @@ export type Piece =
   | { kind: 'status'; text: string }
   /** Кусок размышления модели (сводка): показывается в ленте свёрнутой строкой. */
   | { kind: 'thinking'; text: string }
+  /** Вопрос пользователю от gateway (ограничитель расхода): ход на этом кончается. */
+  | { kind: 'ask'; question: string; options?: string[] }
   | { kind: 'session'; id: string }
   | { kind: 'usage'; usage: Usage }
 
