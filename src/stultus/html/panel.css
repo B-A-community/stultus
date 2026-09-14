@@ -19,8 +19,13 @@
 .recipe__actions{display:flex;gap:6px;margin-top:8px}
 .recipe__actions .btn{font-size:11px;padding:4px 9px}
 .recipes__empty{color:var(--muted);font-size:12px;padding:12px 0}
-[data-theme=light]{--bg:#f3f3ee;--surface:#ffffff;--raised:#e9eae3;--line:#d3d6cd;--text:#1d201c;--muted:#5d645b;--quiet:#8a9088;--accent-ink:#1d201c}
-[data-theme=light] .provider{background:#eeeee8;border-bottom-color:#dcdfd6}
-[data-theme=light] pre{background:#f7f7f2;color:#333a31}
-[data-theme=light] .settings__panel{background:#ffffff}
-[data-theme=light] .msg--user{border-color:#d3d6cd}
+/* Светлая тема: цвета интерфейса SketchUp считаются в JS (applyScheme); здесь только то, что не выражается токенами. */
+[data-theme=light] .brand{filter:brightness(.42) saturate(.9)}
+[data-theme=light] .empty__graphic{filter:brightness(.55) saturate(.9)}
+[data-theme=light] .msg--error{background:#b4433a0c;border-color:#b4433a55;color:#9a352c}
+[data-theme=light] .tool[data-state=error]{border-color:#c9857c}
+[data-theme=light] .btn--danger{color:#a53d33;border-color:#c9857c}
+[data-theme=light] .composer__row{box-shadow:0 2px 10px #0000000e}
+/* Стрелка ↗ — символ, а не цветной эмодзи Windows. */
+.suggestion span,.btn--primary,.render__save,.card__options .btn{font-variant-emoji:text}
+.suggestion span{font-family:"Segoe UI Symbol","Segoe UI",sans-serif}

@@ -81,7 +81,8 @@
     archive: null,     // { count, at } — удалённая переписка, которую можно вернуть
     turnOps: 0,        // сколько execute_ruby было в текущем ходе — первый создаёт пункт Undo
     turnLabel: '',
-    recipes: []        // копилка приёмов с gateway
+    recipes: [],       // копилка приёмов с gateway
+    accent: 'lime'     // цвет этого окна (хранится в файле модели)
   };
 
   // Десять цветов окна: свой у каждой открытой модели, чтобы окна не путались.
@@ -553,15 +554,54 @@
   }
 
   // ---------- Тема и цвет окна ----------
-  function applyTheme(theme) {
-    app.dataset.theme = theme === 'light' ? 'light' : 'dark';
+  // Вся палитра считается из выбранного цвета: тёмная тема — графит Graphite с
+  // нейтралями, чуть подкрашенными под оттенок; светлая — серые интерфейса
+  // SketchUp 2024 (окна #f0f0f0, панели белые, рамки #ccc) с тем же оттенком.
+  function hexToHsl(hex) {
+    var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(hex); if (!m) return [86, 84, 75];
+    var r = parseInt(m[1], 16) / 255, g = parseInt(m[2], 16) / 255, b = parseInt(m[3], 16) / 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, h = 0, sat = 0;
+    if (max !== min) {
+      var d = max - min; sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      if (max === r) h = (g - b) / d + (g < b ? 6 : 0); else if (max === g) h = (b - r) / d + 2; else h = (r - g) / d + 4;
+      h *= 60;
+    }
+    return [h, sat * 100, l * 100];
   }
-  function applyAccent(id) {
+  function hsl(h, s, l, a) { return a == null ? 'hsl(' + h.toFixed(0) + ' ' + s.toFixed(0) + '% ' + l.toFixed(0) + '%)' : 'hsl(' + h.toFixed(0) + ' ' + s.toFixed(0) + '% ' + l.toFixed(0) + '% / ' + a + ')'; }
+  function applyScheme() {
+    var theme = app.dataset.theme === 'light' ? 'light' : 'dark';
+    var id = state.accent || 'lime';
     var found = ACCENTS.filter(function (a) { return a[0] === id; })[0] || ACCENTS[0];
-    document.documentElement.style.setProperty('--accent', found[1]);
+    var c = hexToHsl(found[1]), h = c[0], as = c[1], al = c[2];
+    var v = {};
+    if (theme === 'dark') {
+      var n = 9; // насыщенность нейтралей
+      v['--bg'] = hsl(h, n, 10.5); v['--bg-2'] = hsl(h, n, 11.5); v['--surface'] = hsl(h, n, 13.5); v['--surface-2'] = hsl(h, n, 14.5); v['--surface-3'] = hsl(h, n, 13);
+      v['--raised'] = hsl(h, n, 17); v['--line'] = hsl(h, n, 21.5); v['--line-2'] = hsl(h, n, 18); v['--border-strong'] = hsl(h, n, 27); v['--panel-bg'] = hsl(h, n, 12.5);
+      v['--code-bg'] = hsl(h, n, 8.5); v['--code-fg'] = hsl(h, 8, 75); v['--input-bg'] = hsl(h, n, 9.5);
+      v['--text'] = hsl(h, 12, 92); v['--text-2'] = hsl(h, 6, 73); v['--muted'] = hsl(h, 5, 64); v['--quiet'] = hsl(h, 4, 48);
+      v['--accent'] = found[1]; v['--accent-text'] = found[1]; v['--accent-ink'] = hsl(h, 30, 15); v['--accent-hover'] = hsl(h, as, Math.min(al + 6, 95)); v['--accent-dim'] = hsl(h, 25, 55);
+      v['--accent-soft'] = hsl(h, as, al, 0.07); v['--accent-mid'] = hsl(h, as, al, 0.2); v['--accent-strong'] = hsl(h, as, al, 0.27); v['--accent-sel'] = hsl(h, as, al, 0.33);
+      v['--overlay'] = hsl(h, 10, 7, 0.78); v['--btn-hover'] = '#ffffff09';
+    } else {
+      var t = 5; // лёгкий оттенок на серых SketchUp
+      v['--bg'] = hsl(h, t, 94); v['--bg-2'] = hsl(h, t, 92); v['--surface'] = '#ffffff'; v['--surface-2'] = hsl(h, t, 97.5); v['--surface-3'] = hsl(h, t, 95.5);
+      v['--raised'] = hsl(h, t, 90); v['--line'] = hsl(h, t, 81); v['--line-2'] = hsl(h, t, 86); v['--border-strong'] = hsl(h, t, 73); v['--panel-bg'] = '#ffffff';
+      v['--code-bg'] = hsl(h, t, 96); v['--code-fg'] = hsl(h, 10, 24); v['--input-bg'] = '#ffffff';
+      v['--text'] = hsl(h, 10, 12); v['--text-2'] = hsl(h, 6, 28); v['--muted'] = hsl(h, 5, 38); v['--quiet'] = hsl(h, 4, 54);
+      v['--accent'] = found[1]; v['--accent-text'] = hsl(h, Math.max(as, 45), 33); v['--accent-ink'] = hsl(h, 30, 14); v['--accent-hover'] = hsl(h, as, Math.max(al - 7, 40)); v['--accent-dim'] = hsl(h, 40, 45);
+      v['--accent-soft'] = hsl(h, as, 45, 0.08); v['--accent-mid'] = hsl(h, as, 45, 0.22); v['--accent-strong'] = hsl(h, as, 45, 0.35); v['--accent-sel'] = hsl(h, as, 45, 0.3);
+      v['--overlay'] = hsl(h, 5, 85, 0.72); v['--btn-hover'] = '#00000009';
+    }
+    var root = document.documentElement.style;
+    Object.keys(v).forEach(function (k) { root.setProperty(k, v[k]); });
+    document.documentElement.style.colorScheme = theme;
     var picker = $('accentPicker');
     if (picker) picker.querySelectorAll('.accent__swatch').forEach(function (s) { s.setAttribute('aria-pressed', String(s.dataset.accent === found[0])); });
   }
+  function applyTheme(theme) { app.dataset.theme = theme === 'light' ? 'light' : 'dark'; applyScheme(); }
+  function applyAccent(id) { state.accent = id; applyScheme(); }
   function buildAccentPicker() {
     var picker = $('accentPicker'); if (!picker) return;
     picker.innerHTML = '';
