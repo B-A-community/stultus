@@ -46,7 +46,8 @@ Undo: не понравилось — Ctrl+Z.
   не нужны: соединение исходящее.
 
 Инструменты модели: `execute_ruby`, `get_scene`, `select`, `take_screenshot`,
-`render_viewport`, `render_vray`, `undo`, `ask_user`. Подробно — [docs/PROTOCOL.md](docs/PROTOCOL.md).
+`render_viewport`, `render_vray`, `scenes`, `save_recipe`, `get_recipe`, `undo`,
+`ask_user`. Подробно — [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 ## Статус
 
@@ -134,7 +135,7 @@ src/stultus/settings.rb   адрес/пропуск в реестре SketchUp
 src/stultus/html/         index.html, app.js, app.css — окно
 server/                   gateway: src/{index,chat,mcp,connection,config,prompt}.ts, providers/{claude,codex}.ts
 server/deploy/            Dockerfile, docker-compose.yml, .env.example
-docs/                     ARCHITECTURE, PROTOCOL, POSTPRODUCTION, KNOWLEDGE-VRAY, AGENT-GUIDE, DESIGN-BRIEF, UI-CONTRACT
+docs/                     ARCHITECTURE, PROTOCOL, USER-GUIDE, ROADMAP, POSTPRODUCTION, KNOWLEDGE-VRAY, AGENT-GUIDE, DESIGN-BRIEF, UI-CONTRACT
 tests/                    live_*.rb — прогоны на живом SketchUp через мост
 tools/build_rbz.ps1       сборка пакета
 ```
@@ -151,6 +152,9 @@ tools/build_rbz.ps1       сборка пакета
   отклоняет MCP-инструменты без пометки «только чтение» («requires
   approval»). Лечится `default_tools_approval_mode = "approve"` у сервера
   в его конфиге; `auto` не помогает.
+- **Лимит времени execute_ruby может вызвать нестабильность.** Прерывание
+  идёт из другого потока Ruby и может застать SketchUp посреди вызова API;
+  после этого возможны вылеты. Настройка `ruby_timeout` (90 с, 0 = выкл).
 - **Новые параметры инструментов не доходят до старых разговоров.** Claude
   Code в продолженной сессии держит описания инструментов с первого хода;
   после обновления gateway модель увидит их только в новом разговоре
