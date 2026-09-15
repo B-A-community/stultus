@@ -79,6 +79,8 @@ Gateway принимает окна SketchUp и для каждого подни
 
 ## Установка
 
+Пошаговая инструкция развёртывания у клиента — [docs/DEPLOY.md](docs/DEPLOY.md).
+
 ### Плагин (рабочая машина)
 
 1. `tools\build_rbz.ps1` → `build\Stultus-0.2.9.rbz`, установить через
@@ -135,7 +137,7 @@ src/stultus/settings.rb   адрес/пропуск в реестре SketchUp
 src/stultus/html/         index.html, app.js, app.css — окно
 server/                   gateway: src/{index,chat,mcp,connection,config,prompt}.ts, providers/{claude,codex}.ts
 server/deploy/            Dockerfile, docker-compose.yml, .env.example
-docs/                     ARCHITECTURE, PROTOCOL, USER-GUIDE, ROADMAP, POSTPRODUCTION, KNOWLEDGE-VRAY, AGENT-GUIDE, DESIGN-BRIEF, UI-CONTRACT
+docs/                     DEPLOY, ARCHITECTURE, PROTOCOL, USER-GUIDE, ROADMAP, POSTPRODUCTION, KNOWLEDGE-VRAY, AGENT-GUIDE, DESIGN-BRIEF, UI-CONTRACT
 tests/                    live_*.rb — прогоны на живом SketchUp через мост
 tools/build_rbz.ps1       сборка пакета
 ```
