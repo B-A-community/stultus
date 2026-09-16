@@ -139,6 +139,10 @@ export async function runNative(sourcePath: string | string[], directory: string
         if (!roots.some(root => { const rel = relative(root, file); return rel !== '..' && !rel.startsWith('..' + (process.platform === 'win32' ? '\\' : '/')) && !isAbsolute(rel) })) throw new Error('Codex вернул изображение вне каталога генераций.')
         if ((await stat(file)).size > MAX_IMAGE_BYTES) throw new Error('Изображение превышает допустимый размер.')
         image = pngImage((await readFile(file)).toString('base64'))
+        // Байты у нас; копию в generated_images Codex не убирает сам, а
+        // плитки большого кадра — это сотни мегабайт за день на диске сервера.
+        await rm(file, { force: true }).catch(() => {})
+        await rm(dirname(file), { recursive: false, force: true }).catch(() => {})
       }
     }
     if (packet.method === 'turn/completed') {
