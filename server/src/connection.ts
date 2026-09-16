@@ -23,6 +23,8 @@ export interface ToolResult {
   capture?: { framing: string; width: number; height: number }
   /** Текст задания, если пользователь отредактировал его в карточке. */
   prompt?: string
+  /** Размер визуализации, выбранный в карточке: normal | large. */
+  size?: string
 }
 
 /** Сообщения плагин → gateway. */
@@ -58,7 +60,7 @@ export type GatewayMessage =
   | { type: 'error'; message: string }
   | { type: 'render_status'; id: string; text: string; failed?: boolean }
   | { type: 'recipes'; recipes: import('./recipes.ts').Recipe[] }
-  | { type: 'render_result'; id: string; prompt: string; source: import('./render.ts').RenderImage; image: import('./render.ts').RenderImage }
+  | { type: 'render_result'; id: string; prompt: string; source: import('./render.ts').RenderImage; image: import('./render.ts').RenderImage; large?: boolean }
 
 export interface ProviderInfo {
   id: string

@@ -66,6 +66,18 @@ export const config = {
   renderTimeoutMs: Number(process.env.RENDER_TIMEOUT_MS ?? 10 * 60 * 1000),
 
   /**
+   * «Большой кадр»: встроенный генератор Codex отдаёт ~1,6 мегапикселя и
+   * размер входа игнорирует, поэтому 4K собирается из плиток: эталон целиком,
+   * потом каждая плитка исходника дорисовывается по эталону, и всё
+   * сшивается с плавным нахлёстом. Ширина снимка из SketchUp, сетка плиток
+   * (столбцы×строки), доля нахлёста от ширины плитки, таймаут всего конвейера.
+   */
+  renderLargeWidth: Number(process.env.RENDER_LARGE_WIDTH ?? 3840),
+  renderLargeGrid: process.env.RENDER_LARGE_GRID ?? '3x2',
+  renderLargeOverlap: Number(process.env.RENDER_LARGE_OVERLAP ?? 0.12),
+  renderLargeTimeoutMs: Number(process.env.RENDER_LARGE_TIMEOUT_MS ?? 20 * 60 * 1000),
+
+  /**
    * Потолок кругов «инструмент → ответ» на один ход. Страховка от
    * зацикливания, а не бюджет: цикл «построил → посмотрел → поправил»
    * требует десятков кругов.

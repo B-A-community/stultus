@@ -33,12 +33,26 @@ module BACommunity
 
       # Постпродакшн начинает ровно с того кадра, который выставил человек.
       # Framebuffer сохраняет двухточечную перспективу, кадрирование и формат
-      # вьюпорта. Не задаём width/height и вообще не вызываем setters камеры.
-      def capture_current
+      # вьюпорта. Setters камеры не вызываем.
+      #
+      # width — «большой кадр»: SketchUp рисует тот же вид офскрин в заданную
+      # ширину, высота по пропорциям вьюпорта. Проверено: при совпадающих
+      # пропорциях кадрирование совпадает с framebuffer пиксель в пиксель
+      # (tests/live_capture4k.rb). Потолок — MAX_WIDTH, дальше SketchUp
+      # уходит в минуты и гигабайты.
+      MAX_WIDTH = 7680
+
+      def capture_current(width: nil)
         view = Sketchup.active_model.active_view
         path = File.join(temp_dir, "stultus_frame_#{SecureRandom.hex(12)}.png")
         view.refresh
-        ok = view.write_image(filename: path, source: :framebuffer)
+        ok = if width.to_i > 0
+               w = width.to_i.clamp(320, MAX_WIDTH)
+               h = (w * view.vpheight / view.vpwidth.to_f).round
+               view.write_image(filename: path, width: w, height: h, antialias: true, compression: 0.9)
+             else
+               view.write_image(filename: path, source: :framebuffer)
+             end
         raise 'Не удалось сохранить текущий кадр' unless ok && File.file?(path)
         data = File.binread(path)
         raise 'Снимок не является PNG' unless data.start_with?("\x89PNG\r\n\x1a\n".b)
