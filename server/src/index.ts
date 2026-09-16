@@ -113,7 +113,7 @@ wss.on('connection', (ws) => {
         void runChat(conn, msg)
         break
       case 'tool_result':
-        conn.resolveTool(msg.call_id, { ok: msg.ok, content: msg.content ?? '', image: msg.image, capture: msg.capture, prompt: msg.prompt })
+        conn.resolveTool(msg.call_id, { ok: msg.ok, content: msg.content ?? '', image: msg.image, capture: msg.capture, prompt: msg.prompt, size: msg.size })
         break
       case 'cancel':
         conn.running?.cancel()

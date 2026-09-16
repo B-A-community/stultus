@@ -41,7 +41,7 @@ export type PluginMessage =
       /** Картинки пользователя — оригиналы, base64. */
       attachments?: Array<{ name: string; mime: string; base64: string }>
     }
-  | { type: 'tool_result'; call_id: string; ok: boolean; content?: string; image?: { mime: string; base64: string }; capture?: ToolResult['capture']; prompt?: string }
+  | { type: 'tool_result'; call_id: string; ok: boolean; content?: string; image?: { mime: string; base64: string }; capture?: ToolResult['capture']; prompt?: string; size?: string }
   | { type: 'cancel' }
   | { type: 'recipe_delete'; id: string }
 
