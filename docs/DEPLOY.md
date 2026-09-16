@@ -81,6 +81,20 @@ cd /opt/stultus/app && git pull && cd server && npm ci && npm run build && sudo 
 Docker-вариант (`server/deploy/docker-compose.yml`) есть, но в бою не
 проверялся: используйте systemd.
 
+### Откат версии
+
+Каждое стабильное состояние помечено тегом `vX.Y.Z-stable` (сейчас
+`v0.2.9-stable`, до режима «Большой кадр»). Откат сервера:
+
+```bash
+cd /opt/stultus/app && git fetch --tags && git checkout v0.2.9-stable && cd server && npm ci && npm run build && sudo systemctl restart stultus-gateway
+```
+
+Вернуться на актуальную версию: `git checkout main && git pull`, затем та
+же сборка. На рабочих местах при откате ставится `.rbz` той же версии, что
+и сервер (Extension Manager → Install Extension поверх старой). Настройки
+плагина и переписка в файлах моделей при откате не теряются.
+
 ## 2. Плагин на рабочих машинах
 
 1. Собрать пакет на любой Windows-машине с репозиторием:
