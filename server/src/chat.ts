@@ -188,6 +188,9 @@ export async function runChat(conn: PluginConnection, msg: Extract<PluginMessage
     console.error(`[ход ${msg.turn}] ошибка: ${message}`)
     conn.send({ type: 'error', message })
   } finally {
+    // Ход кончился — всё, что ещё работает в инструментах (например, сборка
+    // большого кадра после таймаута модели), останавливается.
+    controller.abort()
     conn.running = null
   }
 }

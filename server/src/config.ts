@@ -87,6 +87,13 @@ export const config = {
 
   /** Сколько ждать ответа плагина на вызов инструмента, мс. execute_ruby на большой модели — минуты. */
   toolTimeoutMs: Number(process.env.TOOL_TIMEOUT_MS ?? 10 * 60 * 1000),
+  /**
+   * Сколько модель (Codex/Claude) ждёт ответа нашего MCP-инструмента, мс.
+   * Отдельно от таймаута плагина: «большой кадр» 8K — 19 генераций, около
+   * 15 минут внутри одного вызова render_viewport; при 10 минутах модель
+   * получала таймаут, а сборка продолжала крутиться без хода.
+   */
+  mcpToolTimeoutMs: Number(process.env.MCP_TOOL_TIMEOUT_MS ?? 45 * 60 * 1000),
 
   /** Рабочий каталог для процессов моделей (там же AGENTS.md для Codex). */
   workDir: process.env.WORK_DIR ?? `${process.cwd()}/data/work`,

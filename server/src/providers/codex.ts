@@ -47,7 +47,7 @@ export async function* runCodex(conn: PluginConnection, input: RunInput): AsyncG
         [MCP_SERVER_NAME]: {
           url: conn.mcpUrl,
           bearer_token_env_var: 'STULTUS_MCP_TOKEN',
-          tool_timeout_sec: Math.ceil(config.toolTimeoutMs / 1000),
+          tool_timeout_sec: Math.ceil(config.mcpToolTimeoutMs / 1000),
           // Без этого Codex при approvalPolicy=never отклоняет каждый
           // пишущий инструмент: «MCP tool call requires approval, but approval
           // policy is never» — execute_ruby не доходил до плагина. «auto»

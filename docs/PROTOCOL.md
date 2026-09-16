@@ -110,7 +110,7 @@ Gateway поднимает для каждого подключённого ок
 адресу `http://127.0.0.1:<port>/mcp/<connection-id>` с bearer-пропуском,
 уникальным для соединения. Инструменты — те же пять, что выше; каждый вызов
 превращается в `tool_call` по WebSocket и ждёт `tool_result`
-(`TOOL_TIMEOUT_MS`, по умолчанию 10 минут).
+(`TOOL_TIMEOUT_MS`, по умолчанию 10 минут). Отдельно модель ждёт ответа MCP-инструмента до `MCP_TOOL_TIMEOUT_MS` (45 минут): большой кадр 8K живёт внутри одного вызова около 15 минут.
 
 Claude Agent SDK получает сервер через `mcpServers` (`type: http`), Codex —
 через `-c mcp_servers.stultus.url=…` и `bearer_token_env_var`.

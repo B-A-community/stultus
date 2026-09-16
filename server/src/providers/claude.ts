@@ -67,7 +67,7 @@ export async function* runClaude(conn: PluginConnection, input: RunInput): Async
           // Инструментов пять — держим их в подсказке всегда, без отложенной
           // выдачи: иначе модель сначала ищет инструмент, потом строит.
           alwaysLoad: true,
-          timeout: config.toolTimeoutMs,
+          timeout: config.mcpToolTimeoutMs,
         },
       },
       // Свои инструменты — без вопросов; всё, что попросило бы разрешения
