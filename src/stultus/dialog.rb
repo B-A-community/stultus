@@ -122,7 +122,7 @@ module BACommunity
 
         register(dialog, 'screenshot') do |_id, p|
           if p['framing'] == 'viewport'
-            Screenshot.capture_current
+            Screenshot.capture_current(width: p['width'])
           else
             Screenshot.take(
             view_name:    p['view'],

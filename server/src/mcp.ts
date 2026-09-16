@@ -5,7 +5,9 @@ import { z } from 'zod'
 import type { PluginConnection } from './connection.ts'
 import { getRecipe, listRecipes, saveRecipe } from './recipes.ts'
 import { randomUUID } from 'node:crypto'
-import { pngImage, renderConfigured, renderViewport } from './render.ts'
+import { pngImage, renderConfigured, renderViewport, type RenderImage } from './render.ts'
+import { largeGenerations, renderLarge } from './tiles.ts'
+import { config } from './config.ts'
 
 /**
  * MCP-сервер «stultus» — инструменты одного окна SketchUp.
@@ -24,7 +26,7 @@ export const MCP_SERVER_NAME = 'stultus'
 export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'render_vray', 'scenes', 'save_recipe', 'get_recipe', 'undo', 'ask_user'] as const
 
 function build(conn: PluginConnection): McpServer {
-  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.9' })
+  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.10' })
 
   server.registerTool('render_viewport', {
     title: 'Визуализация текущего кадра',
@@ -33,29 +35,43 @@ function build(conn: PluginConnection): McpServer {
       'Камера, выделение и геометрия не меняются. Результат появляется в чате с исходником и кнопкой сохранения. ' +
       'Используй только по просьбе сделать визуализацию/рендер/постпродакшн. Не вызывай select с zoom или ' +
       'execute_ruby перед этим: ракурс уже выбрал пользователь. Не нужен отдельный take_screenshot.',
-    inputSchema: { prompt: z.string().trim().min(1).max(6000).describe('Пожелания к свету, материалам и атмосфере; сохранить архитектуру и ракурс') },
+    inputSchema: {
+      prompt: z.string().trim().min(1).max(6000).describe('Пожелания к свету, материалам и атмосфере; сохранить архитектуру и ракурс'),
+      size: z.enum(['normal', 'large']).optional().describe(
+        'normal (по умолчанию) — один кадр ~1,6 мегапикселя, около минуты. large — «большой кадр» ' +
+        `${config.renderLargeWidth} px по ширине (около 4K): собирается из плиток, ${largeGenerations()} генераций, ` +
+        'несколько минут, у швов плиток возможны артефакты. Выбирай large только по просьбе: 4K, 2K, большой, для печати, высокое разрешение.'),
+    },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-  }, async ({ prompt }) => {
+  }, async ({ prompt, size }) => {
     const id = randomUUID(), signal = conn.running?.signal
     try {
       if (!renderConfigured()) throw new Error('Генерация ещё не подключена: нужен вход Codex на gateway и RENDER_ENABLED=1.')
       if (!signal || signal.aborted) throw new Error('Визуализация доступна только в активном ходе пользователя.')
-      const shot = await conn.callTool('render_viewport', { prompt, render_id: id })
+      const shot = await conn.callTool('render_viewport', { prompt, render_id: id, size: size ?? 'normal', large_width: config.renderLargeWidth, large_generations: largeGenerations() })
       if (!shot.ok || !shot.image) return { content: [{ type: 'text' as const, text: shot.content || 'Пользователь не разрешил визуализацию.' }], isError: !shot.ok }
       signal.throwIfAborted()
       if (shot.capture?.framing !== 'viewport') throw new Error('Обновите плагин: снимок должен сохранять кадрирование вьюпорта.')
       const source = pngImage(shot.image.base64)
-      // Пользователь мог поправить задание в карточке — генерируем по его тексту.
+      // Пользователь мог поправить задание и размер в карточке — генерируем по его выбору.
       const finalPrompt = (shot.prompt ?? '').trim().slice(0, 6000) || prompt
       const edited = finalPrompt !== prompt
-      conn.send({ type: 'render_status', id, text: 'Создаю визуализацию. Это может занять несколько минут…' })
-      const image = await renderViewport(source, finalPrompt, signal)
+      const large = shot.size === 'large'
+      let image: RenderImage, shown: RenderImage, sourceShown = source, note = ''
+      if (large) {
+        const result = await renderLarge(source, finalPrompt, signal, text => conn.send({ type: 'render_status', id, text: `Большой кадр: ${text}` }))
+        image = result.image; shown = result.preview; sourceShown = result.source
+        note = ` Это «большой кадр» из плиток (${result.generations} генераций): у швов плиток возможны двоение кромок и разница тона, предупреди пользователя и предложи проверить стыки крупно. Тебе показано уменьшенное превью.`
+      } else {
+        conn.send({ type: 'render_status', id, text: 'Создаю визуализацию. Это может занять несколько минут…' })
+        image = await renderViewport(source, finalPrompt, signal); shown = image
+      }
       signal.throwIfAborted()
-      conn.send({ type: 'render_result', id, prompt: finalPrompt, source, image })
+      conn.send({ type: 'render_result', id, prompt: finalPrompt, source: sourceShown, image, large })
       const changedRatio = Math.abs(image.width / image.height / (source.width / source.height) - 1) > 0.02
       return { content: [
-        { type: 'text' as const, text: `Постпродакшн-кадр ${image.width}×${image.height} показан пользователю. Исходник ${source.width}×${source.height}. Геометрия SketchUp не менялась. Это ИИ-визуализация: сравни её с исходником, не обещай точность геометрии.` + (changedRatio ? ' Формат результата отличается от исходного — сообщи пользователю.' : '') + (edited ? ` Пользователь изменил задание, генерация шла по его тексту: «${finalPrompt}».` : '') },
-        { type: 'image' as const, data: image.base64, mimeType: image.mime },
+        { type: 'text' as const, text: `Постпродакшн-кадр ${image.width}×${image.height} показан пользователю. Исходник ${source.width}×${source.height}. Геометрия SketchUp не менялась. Это ИИ-визуализация: сравни её с исходником, не обещай точность геометрии.` + note + (changedRatio ? ' Формат результата отличается от исходного — сообщи пользователю.' : '') + (edited ? ` Пользователь изменил задание, генерация шла по его тексту: «${finalPrompt}».` : '') },
+        { type: 'image' as const, data: shown.base64, mimeType: shown.mime },
       ] }
     } catch (error) {
       const text = signal?.aborted ? 'Визуализация остановлена.' : error instanceof Error ? error.message : String(error)

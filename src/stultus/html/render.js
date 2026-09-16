@@ -50,6 +50,14 @@ window.StultusRender = function (api) {
     var edit = element('button', 'btn', 'Изменить');
     edit.setAttribute('data-act', 'edit');
     allow.insertAdjacentElement('afterend', edit);
+    // «Большой кадр»: снимок в ~4K, сборка из плиток на gateway. Честно
+    // пишем цену: число генераций, минуты, возможные швы.
+    var option = element('label', 'card__option');
+    var check = document.createElement('input'); check.type = 'checkbox'; check.checked = msg.args.size === 'large';
+    var gens = msg.args.large_generations || 7, largeWidth = msg.args.large_width || 3840;
+    option.appendChild(check);
+    option.appendChild(document.createTextNode(' Большой кадр: ' + largeWidth + ' px по ширине, ' + gens + ' генераций, несколько минут. Собирается из плиток, у стыков возможны артефакты.'));
+    text.insertAdjacentElement('afterend', option);
     var editor = null;
     edit.onclick = function () {
       if (jobs[id] !== job || editor) return;
@@ -71,22 +79,23 @@ window.StultusRender = function (api) {
     allow.onclick = function () {
       if (jobs[id] !== job) return;
       var prompt = chosenPrompt();
-      allow.disabled = deny.disabled = edit.disabled = true;
+      var large = check.checked;
+      allow.disabled = deny.disabled = edit.disabled = check.disabled = true;
       if (editor) { editor.remove(); editor = null; }
-      edit.hidden = true;
-      card.querySelector('.card__text').textContent = 'Фиксирую текущий кадр…';
-      api.rb('screenshot', { framing: 'viewport' }).then(function (r) {
+      edit.hidden = true; option.remove();
+      card.querySelector('.card__text').textContent = large ? 'Фиксирую текущий кадр в ' + largeWidth + ' px…' : 'Фиксирую текущий кадр…';
+      api.rb('screenshot', large ? { framing: 'viewport', width: largeWidth } : { framing: 'viewport' }).then(function (r) {
         if (jobs[id] !== job) return;
         if (!r || !r.ok) throw new Error(r && r.error || 'Снимок не получен.');
         job.source = r.base64;
         var preview = card.querySelector('.card__preview'); preview.src = imageUrl(r.base64); preview.hidden = false; zoomable(preview);
         card.classList.add('is-done');
         card.querySelector('.card__title').textContent = 'Кадр зафиксирован';
-        card.querySelector('.card__text').textContent = r.width + ' × ' + r.height + ' · создаю визуализацию…\n\nЗадание: ' + prompt;
+        card.querySelector('.card__text').textContent = r.width + ' × ' + r.height + (large ? ' · большой кадр, собираю из плиток…' : ' · создаю визуализацию…') + '\n\nЗадание: ' + prompt;
         var edited = prompt !== msg.args.prompt;
         api.send({ type: 'tool_result', call_id: msg.call_id, ok: true,
-          content: edited ? 'Точный кадр вьюпорта разрешён для постпродакшна. Пользователь изменил задание, в генерацию уходит его текст.' : 'Точный кадр вьюпорта разрешён для постпродакшна.',
-          image: { mime: r.mime, base64: r.base64 }, capture: { framing: r.framing, width: r.width, height: r.height }, prompt: prompt });
+          content: (edited ? 'Точный кадр вьюпорта разрешён для постпродакшна. Пользователь изменил задание, в генерацию уходит его текст.' : 'Точный кадр вьюпорта разрешён для постпродакшна.') + (large ? ' Пользователь выбрал большой кадр.' : ''),
+          image: { mime: r.mime, base64: r.base64 }, capture: { framing: r.framing, width: r.width, height: r.height }, prompt: prompt, size: large ? 'large' : 'normal' });
         api.scroll();
       }).catch(function (error) {
         if (jobs[id] !== job) return;
@@ -97,19 +106,20 @@ window.StultusRender = function (api) {
     deny.onclick = function () {
       if (jobs[id] !== job) return;
       if (editor) { editor.remove(); editor = null; }
+      option.remove();
       record.ok = false; card.classList.add('is-done'); card.querySelector('.card__text').textContent = 'Создание визуализации отменено.'; delete jobs[id];
       api.send({ type: 'tool_result', call_id: msg.call_id, ok: false, content: 'Пользователь отменил визуализацию. Ничего не генерируй.' });
     };
     api.hideEmpty(); api.chat.appendChild(card); api.scroll();
   }
-  function frame(id, prompt) {
+  function frame(id, prompt, large) {
     var el = element('section', 'render');
-    var head = element('div', 'render__head'), title = element('span', 'render__title', 'Постпродакшн'), buttons = element('div', 'render__switch');
+    var head = element('div', 'render__head'), title = element('span', 'render__title', large ? 'Постпродакшн · большой кадр' : 'Постпродакшн'), buttons = element('div', 'render__switch');
     var before = element('button', 'btn', 'Исходник'), after = element('button', 'btn', 'Результат');
     before.setAttribute('aria-pressed', 'false'); after.setAttribute('aria-pressed', 'true');
     buttons.appendChild(before); buttons.appendChild(after); head.appendChild(title); head.appendChild(buttons);
     var img = element('img', 'render__image'); img.alt = 'ИИ-визуализация выбранного ракурса'; img.hidden = true; zoomable(img);
-    var footer = element('div', 'render__footer'), note = element('span', 'render__note', 'ИИ-визуализация · сравните с исходником'), save = element('button', 'btn render__save', 'Сохранить PNG ↗');
+    var footer = element('div', 'render__footer'), note = element('span', 'render__note', large ? 'ИИ-визуализация из плиток · проверьте стыки крупно' : 'ИИ-визуализация · сравните с исходником'), save = element('button', 'btn render__save', 'Сохранить PNG ↗');
     save.disabled = true; footer.appendChild(note); footer.appendChild(save);
     var info = element('div', 'render__status'); info.setAttribute('role', 'status');
     el.appendChild(head);
@@ -130,9 +140,9 @@ window.StultusRender = function (api) {
   function result(msg) {
     var job = jobs[msg.id]; if (!job) return;
     job.record.ok = true; job.card.remove(); delete jobs[msg.id];
-    var output = frame(msg.id, msg.prompt); output.setImages(msg.source.base64, msg.image.base64);
+    var output = frame(msg.id, msg.prompt, msg.large); output.setImages(msg.source.base64, msg.image.base64);
     output.info.textContent = 'Сохраняю кадр на этом компьютере…';
-    api.remember({ role: 'assistant', text: '', render: { id: msg.id, prompt: msg.prompt }, at: new Date().toISOString() });
+    api.remember({ role: 'assistant', text: '', render: { id: msg.id, prompt: msg.prompt, large: !!msg.large }, at: new Date().toISOString() });
     api.rb('cache_render', { id: msg.id, image: msg.image.base64, source: msg.source.base64 }).then(function (r) {
       output.info.textContent = r.ok ? '' : 'Не удалось сохранить кадр: ' + r.error;
       output.save.disabled = !r.ok;
@@ -141,7 +151,7 @@ window.StultusRender = function (api) {
     api.scroll();
   }
   function restore(data) {
-    api.hideEmpty(); var output = frame(data.id, data.prompt); output.info.textContent = 'Загружаю сохранённый кадр…';
+    api.hideEmpty(); var output = frame(data.id, data.prompt, data.large); output.info.textContent = 'Загружаю сохранённый кадр…';
     api.rb('get_render', { id: data.id }).then(function (r) {
       if (!r.ok) { output.info.textContent = r.error; return; }
       output.setImages(r.source, r.image); output.save.disabled = false; output.info.textContent = '';
