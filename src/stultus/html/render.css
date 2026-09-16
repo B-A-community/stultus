@@ -17,3 +17,6 @@
 .card__option{display:flex;gap:8px;align-items:flex-start;margin:8px 0 4px;font-size:12px;line-height:1.4;color:var(--text-2);cursor:pointer}
 .card__option input{margin:2px 0 0;accent-color:var(--accent);flex:none}
 .card__option:has(input:checked){color:var(--text)}
+.card__option{flex-wrap:wrap;align-items:center}
+.card__select{font:inherit;color:var(--text);background:var(--input-bg);border:1px solid var(--line);border-radius:6px;padding:3px 6px;max-width:100%}
+.card__option-hint{flex-basis:100%;color:var(--text-2)}

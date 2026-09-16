@@ -13,7 +13,7 @@
  * прямых кромках у шва возможно двоение, тон плиток может немного отличаться.
  */
 import sharp from 'sharp'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { config } from './config.ts'
 import { pngImage, postproductionPrompt, runNative, tilePrompt, type RenderImage } from './render.ts'
@@ -22,6 +22,25 @@ export interface Grid { cols: number; rows: number }
 export interface Tile { col: number; row: number; left: number; top: number; width: number; height: number }
 export interface Layout { tiles: Tile[]; overlapX: number; overlapY: number }
 
+/**
+ * Размеры большого кадра. Ширина — снимок из SketchUp (высота по вьюпорту),
+ * сетка подобрана так, чтобы плитка была около 1,6–2 мегапикселей: столько
+ * отдаёт генератор, и растягивать результат почти не приходится.
+ */
+export const LARGE_SIZES = {
+  '4k': { width: 3840, grid: '3x2', label: '4K' },
+  '6k': { width: 5760, grid: '4x3', label: '6K' },
+  '8k': { width: 7680, grid: '6x3', label: '8K' },
+} as const
+export type LargeSize = keyof typeof LARGE_SIZES
+export const SIZE_IDS = ['normal', ...Object.keys(LARGE_SIZES)] as ['normal', ...LargeSize[]]
+
+/** «large» из старых окон и промптов — это 4K. */
+export function largeSize(size: string | undefined): LargeSize | null {
+  if (size === 'large') return '4k'
+  return size && size in LARGE_SIZES ? (size as LargeSize) : null
+}
+
 /** Ширина, в которую ужимается кадр для генератора: больше он всё равно не отдаёт. */
 const GENERATOR_WIDTH = 1600
 /** Ширина превью для чата и модели: 4K в ленту и в контекст модели не нужен. */
@@ -29,7 +48,7 @@ const PREVIEW_WIDTH = 1920
 
 export function parseGrid(text: string): Grid {
   const m = /^\s*(\d+)\s*[x×]\s*(\d+)\s*$/i.exec(text)
-  const clamp = (v: number) => Math.min(4, Math.max(1, v))
+  const clamp = (v: number) => Math.min(8, Math.max(1, v))
   if (!m) return { cols: 3, rows: 2 }
   return { cols: clamp(Number(m[1])), rows: clamp(Number(m[2])) }
 }
@@ -109,17 +128,24 @@ export function tilePosition(tile: Tile, grid: Grid): string {
 
 export type Generate = (sources: string | string[], directory: string, prompt: string, signal: AbortSignal) => Promise<RenderImage>
 
-export interface LargeResult { image: RenderImage; preview: RenderImage; source: RenderImage; generations: number }
+/** Полный кадр — файл целиком (в 8K это десятки мегабайт, в чат он не идёт), превью — для ленты и модели. */
+export interface LargeResult { file: Buffer; width: number; height: number; preview: RenderImage; source: RenderImage; generations: number }
 
 /** Сколько генераций займёт большой кадр: эталон плюс плитки. */
-export function largeGenerations(grid: Grid = parseGrid(config.renderLargeGrid)): number {
+export function largeGenerations(size: LargeSize): number {
+  const grid = parseGrid(LARGE_SIZES[size].grid)
   return 1 + grid.cols * grid.rows
 }
 
-export async function renderLarge(source: RenderImage, prompt: string, signal: AbortSignal,
+/** Описание размеров для окна и для схемы инструмента. */
+export function largeSizeList(): Array<{ id: LargeSize; label: string; width: number; generations: number }> {
+  return (Object.keys(LARGE_SIZES) as LargeSize[]).map(id => ({ id, label: LARGE_SIZES[id].label, width: LARGE_SIZES[id].width, generations: largeGenerations(id) }))
+}
+
+export async function renderLarge(size: LargeSize, source: RenderImage, prompt: string, signal: AbortSignal,
   progress: (text: string) => void, generate: Generate = runNative): Promise<LargeResult> {
-  const grid = parseGrid(config.renderLargeGrid)
-  const total = AbortSignal.any([signal, AbortSignal.timeout(config.renderLargeTimeoutMs)])
+  const grid = parseGrid(LARGE_SIZES[size].grid)
+  const total = AbortSignal.any([signal, AbortSignal.timeout(largeGenerations(size) * config.renderLargePerGenerationMs)])
   const perCall = () => AbortSignal.any([total, AbortSignal.timeout(config.renderTimeoutMs)])
   const root = resolve(config.workDir, 'renders')
   await mkdir(root, { recursive: true, mode: 0o700 })
@@ -152,8 +178,13 @@ export async function renderLarge(source: RenderImage, prompt: string, signal: A
     const stitched = await stitch(width, height, layout, pieces)
     const preview = await sharp(stitched).resize({ width: Math.min(PREVIEW_WIDTH, width) }).png().toBuffer()
     const sourcePreview = await sharp(full).resize({ width: Math.min(PREVIEW_WIDTH, width) }).png().toBuffer()
+    if (config.renderKeepLast) {
+      const keep = join(root, 'last-large.png')
+      await writeFile(keep, stitched, { mode: 0o600 }).catch(() => {})
+      await copyFile(keep, keep).catch(() => {})
+    }
     return {
-      image: pngImage(stitched.toString('base64')),
+      file: stitched, width, height,
       preview: pngImage(preview.toString('base64')),
       source: pngImage(sourcePreview.toString('base64')),
       generations: n + 1,

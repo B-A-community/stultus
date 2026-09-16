@@ -277,6 +277,7 @@
     switch (msg.type) {
       case 'render_status': renders.status(msg); break;
       case 'render_result': renders.result(msg); break;
+      case 'render_chunk': renders.chunk(msg); break;
       case 'welcome':
         state.providers = msg.providers || [];
         setStatus('connected', 'gateway ' + (msg.version || ''));
@@ -705,6 +706,9 @@
     // Пришёл инструмент — текущий пузырь закрывается, следующий текст
     // откроет новый (см. ensureBubble).
     commitText();
+    // Служебный вызов: gateway ждёт, пока кадр ляжет на диск, и просит
+    // скопировать его по указанному пути. В ленте он не показывается.
+    if (msg.name === 'render_export') return renders.exportDone(msg);
     var record = { name: msg.name, label: toolLabel(msg), ok: null };
     state.current.tools.push(record);
 

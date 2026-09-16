@@ -60,7 +60,9 @@ export type GatewayMessage =
   | { type: 'error'; message: string }
   | { type: 'render_status'; id: string; text: string; failed?: boolean }
   | { type: 'recipes'; recipes: import('./recipes.ts').Recipe[] }
-  | { type: 'render_result'; id: string; prompt: string; source: import('./render.ts').RenderImage; image: import('./render.ts').RenderImage; large?: boolean }
+  | { type: 'render_result'; id: string; prompt: string; source: import('./render.ts').RenderImage; image: import('./render.ts').RenderImage; large?: boolean; full?: { width: number; height: number; bytes: number; chunks: number } }
+  /** Полный большой кадр идёт в окно кусками base64 по порядку; окно дописывает их в файл на диске. */
+  | { type: 'render_chunk'; id: string; index: number; total: number; data: string }
 
 export interface ProviderInfo {
   id: string

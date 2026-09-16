@@ -1,13 +1,24 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import sharp from 'sharp'
-import { axisWeights, layoutTiles, parseGrid, renderLarge, stitch, tilePosition } from '../src/tiles.ts'
+import { LARGE_SIZES, axisWeights, largeGenerations, largeSize, layoutTiles, parseGrid, renderLarge, stitch, tilePosition } from '../src/tiles.ts'
 import { pngImage, tilePrompt, type RenderImage } from '../src/render.ts'
 
 test('grid parsing clamps and falls back', () => {
   assert.deepEqual(parseGrid('3x2'), { cols: 3, rows: 2 })
-  assert.deepEqual(parseGrid(' 4 × 9 '), { cols: 4, rows: 4 })
+  assert.deepEqual(parseGrid(' 4 × 9 '), { cols: 4, rows: 8 })
   assert.deepEqual(parseGrid('garbage'), { cols: 3, rows: 2 })
+})
+
+test('sizes: generations per size, tiles near the generator budget, large alias', () => {
+  assert.deepEqual([largeGenerations('4k'), largeGenerations('6k'), largeGenerations('8k')], [7, 13, 19])
+  assert.equal(largeSize('large'), '4k'); assert.equal(largeSize('8k'), '8k'); assert.equal(largeSize('normal'), null); assert.equal(largeSize(undefined), null)
+  for (const id of Object.keys(LARGE_SIZES) as Array<keyof typeof LARGE_SIZES>) {
+    const { width, grid } = LARGE_SIZES[id]
+    const layout = layoutTiles(width, Math.round(width * 9 / 16), parseGrid(grid), 0.12)
+    const mp = layout.tiles[0]!.width * layout.tiles[0]!.height / 1e6
+    assert.ok(mp > 1.2 && mp < 2.6, `${id}: плитка ${mp.toFixed(2)} Мп`)
+  }
 })
 
 test('tiles cover the frame with the requested overlap', () => {
@@ -78,7 +89,7 @@ test('large frame: reference first, then every tile with two images, result at f
     return pngImage((await solid(300, 170, [10, 200, 10])).toString('base64'))
   }
   const progress: string[] = []
-  const result = await renderLarge(source, 'тёплый вечер', AbortSignal.timeout(20000), t => progress.push(t), generate)
+  const result = await renderLarge('4k', source, 'тёплый вечер', AbortSignal.timeout(20000), t => progress.push(t), generate)
   assert.equal(calls.length, 7)
   assert.equal(calls[0]!.sources.length, 1)
   assert.match(calls[0]!.prompt, /EDIT the attached SketchUp viewport/)
@@ -87,7 +98,8 @@ test('large frame: reference first, then every tile with two images, result at f
     assert.match(call.sources[0]!, /tile-\d+-source\.png$/)
     assert.match(call.sources[1]!, /tile-\d+-reference\.png$/)
   }
-  assert.deepEqual([result.image.width, result.image.height], [width, height])
+  assert.deepEqual([result.width, result.height], [width, height])
+  assert.ok(result.file.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])))
   assert.ok(result.preview.width <= width)
   assert.equal(result.generations, 7)
   assert.ok(progress.some(t => /Эталон/.test(t)) && progress.some(t => /Плитка 6 из 6/.test(t)) && progress.at(-1)!.startsWith('Сшиваю'))
@@ -102,6 +114,6 @@ test('large frame: abort stops the pipeline without retries', async () => {
     controller.abort()
     throw new Error('Визуализация остановлена.')
   }
-  await assert.rejects(renderLarge(source, 'x', controller.signal, () => {}, generate), /остановлена/)
+  await assert.rejects(renderLarge('4k', source, 'x', controller.signal, () => {}, generate), /остановлена/)
   assert.equal(calls, 1)
 })

@@ -138,9 +138,14 @@ module BACommunity
         end
 
         register(dialog, 'cache_render') do |_id, p|
-          RenderAssets.store(p['id'], p['image'], p['source'])
+          RenderAssets.store(p['id'], p['image'], p['source'], preview: p['preview'] ? true : false)
+        end
+        # Полный большой кадр приходит кусками по порядку: дописываем в файл.
+        register(dialog, 'render_chunk') do |_id, p|
+          RenderAssets.append_chunk(p['id'], p['index'].to_i, p['total'].to_i, p['data'])
         end
         register(dialog, 'get_render') { |_id, p| RenderAssets.read(p['id']) }
+        register(dialog, 'export_render') { |_id, p| RenderAssets.export_to(p['id'], p['path']) }
         register(dialog, 'save_render') { |_id, p| RenderAssets.export(p['id']) }
 
         register(dialog, 'save_sessions') do |_id, p|

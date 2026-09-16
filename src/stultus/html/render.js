@@ -42,7 +42,7 @@ window.StultusRender = function (api) {
     card.querySelector('.card__title').textContent = 'Создать визуализацию этого вида?';
     var NOTE = 'Текущий кадр будет передан генератору Codex. Используются лимиты вашей подписки. Камера и модель останутся прежними.';
     var text = card.querySelector('.card__text');
-    text.textContent = msg.args.prompt + '\n\n' + NOTE;
+    text.textContent = msg.args.prompt + (msg.args.save_path ? '\n\nСохранить в: ' + msg.args.save_path : '') + '\n\n' + NOTE;
     var allow = card.querySelector('[data-act=allow]'), deny = card.querySelector('[data-act=deny]');
     allow.textContent = 'Зафиксировать и создать ↗'; deny.textContent = 'Отмена';
     // «Изменить» — между «создать» и «отмена»: задание открывается в поле
@@ -50,13 +50,23 @@ window.StultusRender = function (api) {
     var edit = element('button', 'btn', 'Изменить');
     edit.setAttribute('data-act', 'edit');
     allow.insertAdjacentElement('afterend', edit);
-    // «Большой кадр»: снимок в ~4K, сборка из плиток на gateway. Честно
-    // пишем цену: число генераций, минуты, возможные швы.
+    // Размер: обычный или «большой кадр» 4K/6K/8K — снимок в заданную ширину,
+    // сборка из плиток на gateway. Честно пишем цену: генерации и минуты.
+    var sizes = msg.args.sizes || [{ id: '4k', label: '4K', width: 3840, generations: 7 }];
     var option = element('label', 'card__option');
-    var check = document.createElement('input'); check.type = 'checkbox'; check.checked = msg.args.size === 'large';
-    var gens = msg.args.large_generations || 7, largeWidth = msg.args.large_width || 3840;
-    option.appendChild(check);
-    option.appendChild(document.createTextNode(' Большой кадр: ' + largeWidth + ' px по ширине, ' + gens + ' генераций, несколько минут. Собирается из плиток, у стыков возможны артефакты.'));
+    option.appendChild(document.createTextNode('Размер '));
+    var select = document.createElement('select'); select.className = 'card__select';
+    var normal = document.createElement('option'); normal.value = 'normal'; normal.textContent = 'обычный, около минуты'; select.appendChild(normal);
+    sizes.forEach(function (s) {
+      var o = document.createElement('option'); o.value = s.id;
+      o.textContent = s.label + ' · ' + s.width + ' px · ' + s.generations + ' генераций, ~' + Math.round(s.generations * 0.8) + ' мин';
+      select.appendChild(o);
+    });
+    var wanted = msg.args.size === 'large' ? '4k' : msg.args.size;
+    if (wanted && sizes.some(function (s) { return s.id === wanted; })) select.value = wanted;
+    option.appendChild(select);
+    var hint = element('span', 'card__option-hint', 'Большие кадры собираются из плиток, у стыков возможны артефакты.');
+    option.appendChild(hint);
     text.insertAdjacentElement('afterend', option);
     var editor = null;
     edit.onclick = function () {
@@ -79,8 +89,10 @@ window.StultusRender = function (api) {
     allow.onclick = function () {
       if (jobs[id] !== job) return;
       var prompt = chosenPrompt();
-      var large = check.checked;
-      allow.disabled = deny.disabled = edit.disabled = check.disabled = true;
+      var size = select.value, chosen = null;
+      sizes.forEach(function (s) { if (s.id === size) chosen = s; });
+      var large = !!chosen, largeWidth = chosen ? chosen.width : 0;
+      allow.disabled = deny.disabled = edit.disabled = select.disabled = true;
       if (editor) { editor.remove(); editor = null; }
       edit.hidden = true; option.remove();
       card.querySelector('.card__text').textContent = large ? 'Фиксирую текущий кадр в ' + largeWidth + ' px…' : 'Фиксирую текущий кадр…';
@@ -95,7 +107,7 @@ window.StultusRender = function (api) {
         var edited = prompt !== msg.args.prompt;
         api.send({ type: 'tool_result', call_id: msg.call_id, ok: true,
           content: (edited ? 'Точный кадр вьюпорта разрешён для постпродакшна. Пользователь изменил задание, в генерацию уходит его текст.' : 'Точный кадр вьюпорта разрешён для постпродакшна.') + (large ? ' Пользователь выбрал большой кадр.' : ''),
-          image: { mime: r.mime, base64: r.base64 }, capture: { framing: r.framing, width: r.width, height: r.height }, prompt: prompt, size: large ? 'large' : 'normal' });
+          image: { mime: r.mime, base64: r.base64 }, capture: { framing: r.framing, width: r.width, height: r.height }, prompt: prompt, size: large ? size : 'normal' });
         api.scroll();
       }).catch(function (error) {
         if (jobs[id] !== job) return;
@@ -137,18 +149,57 @@ window.StultusRender = function (api) {
     };
     return { el: el, info: info, save: save, setImages: setImages };
   }
+  // Полные большие кадры приходят кусками после render_result; куски пишет
+  // Ruby в файл по порядку, окно только передаёт их дальше по одному.
+  var files = {};
+  // saved[id] — обещание «кадр целиком лежит на диске»; его ждёт render_export.
+  var saved = {};
   function result(msg) {
     var job = jobs[msg.id]; if (!job) return;
     job.record.ok = true; job.card.remove(); delete jobs[msg.id];
     var output = frame(msg.id, msg.prompt, msg.large); output.setImages(msg.source.base64, msg.image.base64);
     output.info.textContent = 'Сохраняю кадр на этом компьютере…';
     api.remember({ role: 'assistant', text: '', render: { id: msg.id, prompt: msg.prompt, large: !!msg.large }, at: new Date().toISOString() });
-    api.rb('cache_render', { id: msg.id, image: msg.image.base64, source: msg.source.base64 }).then(function (r) {
-      output.info.textContent = r.ok ? '' : 'Не удалось сохранить кадр: ' + r.error;
-      output.save.disabled = !r.ok;
+    var settle = {}; saved[msg.id] = { output: output, promise: new Promise(function (res, rej) { settle.res = res; settle.rej = rej; }) };
+    if (msg.full) files[msg.id] = { output: output, full: msg.full, queue: Promise.resolve(), received: 0, settle: settle };
+    api.rb('cache_render', { id: msg.id, image: msg.image.base64, source: msg.source.base64, preview: !!msg.full }).then(function (r) {
+      if (!r.ok) { output.info.textContent = 'Не удалось сохранить кадр: ' + r.error; settle.rej(new Error(r.error)); return; }
+      if (!msg.full) { output.info.textContent = ''; output.save.disabled = false; settle.res(); }
+      else output.info.textContent = 'Получаю полный кадр ' + msg.full.width + ' × ' + msg.full.height + '…';
       api.persist();
-    }).catch(function (e) { output.info.textContent = 'Не удалось сохранить кадр: ' + e.message; });
+    }).catch(function (e) { output.info.textContent = 'Не удалось сохранить кадр: ' + e.message; settle.rej(e); });
     api.scroll();
+  }
+  function chunk(msg) {
+    var f = files[msg.id]; if (!f) return;
+    f.queue = f.queue.then(function () {
+      return api.rb('render_chunk', { id: msg.id, index: msg.index, total: msg.total, data: msg.data }).then(function (r) {
+        if (!r.ok) throw new Error(r.error || 'ошибка записи');
+        f.received++;
+        if (r.done) {
+          f.output.info.textContent = 'Полный кадр ' + f.full.width + ' × ' + f.full.height + ' (' + Math.round(f.full.bytes / 1048576) + ' МБ) сохранён на этом компьютере.';
+          f.output.save.disabled = false; delete files[msg.id]; f.settle.res();
+        } else f.output.info.textContent = 'Получаю полный кадр ' + f.full.width + ' × ' + f.full.height + '… ' + f.received + '/' + msg.total;
+      });
+    }).catch(function (e) { f.output.info.textContent = 'Полный кадр не сохранён: ' + e.message; delete files[msg.id]; f.settle.rej(e); });
+  }
+  // Gateway спрашивает, лёг ли кадр на диск, и просит скопировать по пути.
+  function exportDone(msg) {
+    var id = msg.args.render_id, path = (msg.args.save_path || '').trim();
+    var entry = saved[id];
+    var reply = function (ok, content) { api.send({ type: 'tool_result', call_id: msg.call_id, ok: ok, content: content }); };
+    if (!entry) return reply(false, 'Кадр не найден в окне.');
+    // Страховка: если куски так и не дошли, не держим ход вечно.
+    var timeout = new Promise(function (_, rej) { setTimeout(function () { rej(new Error('полный кадр не дошёл за 5 минут')); }, 5 * 60 * 1000); });
+    Promise.race([entry.promise, timeout]).then(function () {
+      delete saved[id];
+      if (!path) return reply(true, 'Кадр сохранён на компьютере пользователя; под ним кнопка «Сохранить PNG».');
+      return api.rb('export_render', { id: id, path: path }).then(function (r) {
+        if (!r.ok) { entry.output.info.textContent = 'Не удалось сохранить в ' + path + ': ' + r.error; return reply(true, 'Кадр в чате, но сохранить по пути не удалось: ' + r.error); }
+        entry.output.info.textContent = 'Сохранено: ' + r.path;
+        reply(true, 'Файл сохранён: ' + r.path + ' (' + Math.round(r.bytes / 1024) + ' КБ).');
+      });
+    }).catch(function (e) { delete saved[id]; reply(true, 'Кадр показан, но на диск не лёг: ' + e.message); });
   }
   function restore(data) {
     api.hideEmpty(); var output = frame(data.id, data.prompt, data.large); output.info.textContent = 'Загружаю сохранённый кадр…';
@@ -160,5 +211,5 @@ window.StultusRender = function (api) {
   function cancel() {
     Object.keys(jobs).forEach(function (id) { status({ id: id, text: 'Визуализация прервана. Можно повторить запрос.', failed: true }); });
   }
-  return { request: request, status: status, result: result, restore: restore, cancel: cancel };
+  return { request: request, status: status, result: result, chunk: chunk, exportDone: exportDone, restore: restore, cancel: cancel };
 };
