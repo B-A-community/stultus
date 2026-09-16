@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import sharp from 'sharp'
-import { LARGE_SIZES, axisWeights, largeGenerations, largeSize, layoutTiles, parseGrid, renderLarge, stitch, tilePosition } from '../src/tiles.ts'
+import { LARGE_SIZES, axisWeights, isFlat, largeGenerations, largeSize, layoutTiles, parseGrid, renderLarge, stitch, tilePosition } from '../src/tiles.ts'
 import { pngImage, tilePrompt, type RenderImage } from '../src/render.ts'
 
 test('grid parsing clamps and falls back', () => {
@@ -53,6 +53,9 @@ test('overlap weights of neighbours sum to one, frame edges stay at full weight'
 async function solid(width: number, height: number, rgb: [number, number, number]): Promise<Buffer> {
   return sharp({ create: { width, height, channels: 3, background: { r: rgb[0], g: rgb[1], b: rgb[2] } } }).png().toBuffer()
 }
+async function noisy(width: number, height: number): Promise<Buffer> {
+  return sharp({ create: { width, height, channels: 3, noise: { type: 'gaussian', mean: 128, sigma: 40 } } }).png().toBuffer()
+}
 
 test('stitching blends the overlap and keeps the outer pixels', async () => {
   const layout = layoutTiles(200, 100, { cols: 2, rows: 1 }, 0.2)
@@ -80,7 +83,7 @@ test('tile prompt names both roles and forbids reframing', () => {
 
 test('large frame: reference first, then every tile with two images, result at full size', async () => {
   const width = 640, height = 360
-  const source = pngImage((await solid(width, height, [90, 120, 150])).toString('base64'))
+  const source = pngImage((await noisy(width, height)).toString('base64'))
   const calls: Array<{ sources: string[]; prompt: string }> = []
   const generate = async (sources: string | string[], _dir: string, prompt: string): Promise<RenderImage> => {
     const list = Array.isArray(sources) ? sources : [sources]
@@ -103,6 +106,25 @@ test('large frame: reference first, then every tile with two images, result at f
   assert.ok(result.preview.width <= width)
   assert.equal(result.generations, 7)
   assert.ok(progress.some(t => /Эталон/.test(t)) && progress.some(t => /Плитка 6 из 6/.test(t)) && progress.at(-1)!.startsWith('Сшиваю'))
+})
+
+test('large frame: flat (empty background) tiles come from the reference without generation', async () => {
+  const width = 640, height = 360
+  // Левая половина пустая, правая с содержимым.
+  const composed = await sharp(await solid(width, height, [255, 255, 255]))
+    .composite([{ input: await noisy(width / 2, height), left: width / 2, top: 0 }]).png().toBuffer()
+  const source = pngImage(composed.toString('base64'))
+  const calls: string[][] = []
+  const generate = async (sources: string | string[]): Promise<RenderImage> => {
+    calls.push(Array.isArray(sources) ? sources : [sources])
+    return pngImage((await solid(200, 120, [10, 200, 10])).toString('base64'))
+  }
+  const progress: string[] = []
+  const result = await renderLarge('4k', source, 'x', AbortSignal.timeout(20000), t => progress.push(t), generate)
+  assert.ok(isFlat(await solid(50, 50, [200, 200, 200])))
+  assert.ok(calls.length < 7 && calls.length >= 2, `генераций ${calls.length}`)
+  assert.equal(result.generations, calls.length)
+  assert.ok(progress.some(t => /пустой фон/.test(t)))
 })
 
 test('large frame: abort stops the pipeline without retries', async () => {

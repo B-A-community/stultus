@@ -45,6 +45,12 @@ export function largeSize(size: string | undefined): LargeSize | null {
 const GENERATOR_WIDTH = 1600
 /** Ширина превью для чата и модели: 4K в ленту и в контекст модели не нужен. */
 const PREVIEW_WIDTH = 1920
+/**
+ * Плитка без содержимого (пустой фон SketchUp): разброс яркости ниже порога.
+ * Такие плитки генератору не отдаём — он на пустом входе рисует плоские
+ * серые прямоугольники; берём кусок эталона, там небо уже есть.
+ */
+const FLAT_STDEV = 6
 
 export function parseGrid(text: string): Grid {
   const m = /^\s*(\d+)\s*[x×]\s*(\d+)\s*$/i.exec(text)
@@ -163,14 +169,23 @@ export async function renderLarge(size: LargeSize, source: RenderImage, prompt: 
     const baseFull = await sharp(Buffer.from(base.base64, 'base64')).resize(width, height, { fit: 'fill' }).png().toBuffer()
 
     const pieces: Array<{ tile: Tile; png: Buffer }> = []
+    let generations = 1
     for (const [i, tile] of layout.tiles.entries()) {
       total.throwIfAborted()
-      progress(`Плитка ${i + 1} из ${n} (${i + 2} из ${n + 1})…`)
       const region = { left: tile.left, top: tile.top, width: tile.width, height: tile.height }
+      const sourceTile = await sharp(full).extract(region).png().toBuffer()
+      const referenceTile = await sharp(baseFull).extract(region).png().toBuffer()
+      if (await isFlat(sourceTile)) {
+        progress(`Плитка ${i + 1} из ${n}: пустой фон, беру из эталона`)
+        pieces.push({ tile, png: referenceTile })
+        continue
+      }
+      progress(`Плитка ${i + 1} из ${n} (${i + 2} из ${n + 1})…`)
       const src = join(directory, `tile-${i}-source.png`), ref = join(directory, `tile-${i}-reference.png`)
-      await writeFile(src, await sharp(full).extract(region).png().toBuffer(), { mode: 0o600 })
-      await writeFile(ref, await sharp(baseFull).extract(region).png().toBuffer(), { mode: 0o600 })
+      await writeFile(src, sourceTile, { mode: 0o600 })
+      await writeFile(ref, referenceTile, { mode: 0o600 })
       const piece = await withRetry(() => generate([src, ref], directory, tilePrompt(prompt, tilePosition(tile, grid)), perCall()), total)
+      generations++
       pieces.push({ tile, png: Buffer.from(piece.base64, 'base64') })
     }
 
@@ -187,11 +202,17 @@ export async function renderLarge(size: LargeSize, source: RenderImage, prompt: 
       file: stitched, width, height,
       preview: pngImage(preview.toString('base64')),
       source: pngImage(sourcePreview.toString('base64')),
-      generations: n + 1,
+      generations,
     }
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
+}
+
+/** Плитка практически одноцветная: пустой фон SketchUp. */
+export async function isFlat(png: Buffer): Promise<boolean> {
+  const stats = await sharp(png).removeAlpha().stats()
+  return Math.max(...stats.channels.map(c => c.stdev)) < FLAT_STDEV
 }
 
 /** Одна повторная попытка на плитку: лимиты и сетевые сбои генератора случаются. Остановка не повторяется. */

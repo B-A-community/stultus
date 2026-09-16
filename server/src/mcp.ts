@@ -70,7 +70,7 @@ function build(conn: PluginConnection): McpServer {
         const chunks = Math.ceil(result.file.length / CHUNK)
         conn.send({ type: 'render_result', id, prompt: finalPrompt, source: sourceShown, image: shown, large: true, full: { width, height, bytes: result.file.length, chunks } })
         for (let i = 0; i < chunks; i++) conn.send({ type: 'render_chunk', id, index: i, total: chunks, data: result.file.subarray(i * CHUNK, (i + 1) * CHUNK).toString('base64') })
-        note = ` Это «большой кадр» ${label} из плиток (${result.generations} генераций): у швов плиток возможны двоение кромок и разница тона, предупреди пользователя и предложи проверить стыки крупно. Тебе показано уменьшенное превью, полный файл сохранён у пользователя.`
+        note = ` Это «большой кадр» ${label} из плиток (${result.generations} генераций, плитки пустого фона взяты из эталона): у швов плиток возможны двоение кромок и разница тона, предупреди пользователя и предложи проверить стыки крупно. Тебе показано уменьшенное превью, полный файл сохранён у пользователя.`
       } else {
         conn.send({ type: 'render_status', id, text: 'Создаю визуализацию. Это может занять несколько минут…' })
         const image = await renderViewport(source, finalPrompt, signal); shown = image; width = image.width; height = image.height
