@@ -1,4 +1,4 @@
-import { config } from './config.ts'
+import { config, type ModelChoice } from './config.ts'
 import type { PluginConnection, PluginMessage, ProviderInfo } from './connection.ts'
 import { claudeConfigured, runClaude } from './providers/claude.ts'
 import { codexConfigured, runCodex } from './providers/codex.ts'
@@ -6,7 +6,7 @@ import type { Piece, RunInput } from './providers/pieces.ts'
 
 type Runner = (conn: PluginConnection, input: RunInput) => AsyncGenerator<Piece>
 
-const PROVIDERS: Record<string, { label: string; configured: () => boolean; models: string[]; default: string; run: Runner }> = {
+const PROVIDERS: Record<string, { label: string; configured: () => boolean; models: ModelChoice[]; default: string; run: Runner }> = {
   claude: {
     label: 'Claude',
     configured: claudeConfigured,
@@ -28,7 +28,7 @@ export function providerList(): ProviderInfo[] {
     id,
     label: p.label,
     configured: p.configured(),
-    models: p.models.map((m) => ({ id: m })),
+    models: p.models.map((m) => ({ id: m.id, label: m.label })),
     default: p.default,
   }))
 }
@@ -95,7 +95,7 @@ export async function runChat(conn: PluginConnection, msg: Extract<PluginMessage
   conn.running = { turn: msg.turn, cancel: () => controller.abort(), signal: controller.signal }
   conn.send({ type: 'turn_start', turn: msg.turn })
 
-  const model = msg.model && provider.models.includes(msg.model) ? msg.model : provider.default
+  const model = msg.model && provider.models.some((m) => m.id === msg.model) ? msg.model : provider.default
   const prompt = buildPrompt(msg.text, msg.scene)
   const started = Date.now()
   if (msg.attachments?.length) {

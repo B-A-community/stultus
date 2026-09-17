@@ -2,6 +2,23 @@
  * Настройки gateway — только из окружения. На виртуалке всё задаётся в
  * /opt/stultus/.env (см. deploy/), в репозиторий файл не попадает.
  */
+export interface ModelChoice { id: string; label?: string }
+
+/**
+ * Список моделей из .env: `id` или `id:Подпись` через запятую. Подпись
+ * показывает окно плагина вместо идентификатора.
+ */
+export function parseModels(text: string): ModelChoice[] {
+  return text
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => {
+      const i = s.indexOf(':')
+      return i > 0 ? { id: s.slice(0, i).trim(), label: s.slice(i + 1).trim() || undefined } : { id: s }
+    })
+}
+
 export const config = {
   /** Порт: и WebSocket для плагинов, и MCP для моделей, и проверка здоровья. */
   port: Number(process.env.PORT ?? 8790),
@@ -42,10 +59,7 @@ export const config = {
    * разные хранилища учётных данных, и SDK отвечает «Not logged in».
    */
   claudeCodePath: process.env.CLAUDE_CODE_PATH ?? '',
-  claudeModels: (process.env.CLAUDE_MODELS ?? 'claude-opus-5,claude-sonnet-5,claude-haiku-4-5')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean),
+  claudeModels: parseModels(process.env.CLAUDE_MODELS ?? 'claude-opus-5,claude-sonnet-5,claude-haiku-4-5'),
   claudeDefaultModel: process.env.CLAUDE_DEFAULT_MODEL ?? 'claude-opus-5',
 
   /**
@@ -55,11 +69,10 @@ export const config = {
    */
   codexApiKey: process.env.CODEX_API_KEY ?? '',
   codexHome: process.env.CODEX_HOME ?? `${process.env.HOME ?? process.env.USERPROFILE ?? '.'}/.codex`,
-  codexModels: (process.env.CODEX_MODELS ?? 'gpt-5.5,gpt-5.5-codex,gpt-5-codex-mini')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean),
-  codexDefaultModel: process.env.CODEX_DEFAULT_MODEL ?? 'gpt-5.5',
+  // Список от `codex app-server` (model/list, 2026-09-17): gpt-6-astra, gpt-5.6-sol,
+  // gpt-5.6-terra, gpt-5.6-luna, gpt-5.5, gpt-5.2. Подписи — как их зовут в бюро.
+  codexModels: parseModels(process.env.CODEX_MODELS ?? 'gpt-6-astra:Топовая,gpt-5.6-sol:Мощная,gpt-5.6-terra:Средняя,gpt-5.6-luna:Слабая'),
+  codexDefaultModel: process.env.CODEX_DEFAULT_MODEL ?? 'gpt-6-astra',
 
   /** Native image generation via Codex login, separate from the chat provider. */
   renderEnabled: process.env.RENDER_ENABLED === '1',

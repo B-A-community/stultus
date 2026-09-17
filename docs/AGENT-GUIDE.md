@@ -74,8 +74,8 @@ Gateway на домашней виртуалке: `192.168.10.94`, ssh `maksar`,
 
 После любого варианта: `sudo systemctl restart stultus-gateway`, затем в
 `/health` должно быть `{"id":"codex","configured":true}`. Модели по умолчанию
-из `CODEX_MODELS` (`gpt-5.5,gpt-5.5-codex,gpt-5-codex-mini`) — поправь под
-свой доступ, `CODEX_DEFAULT_MODEL` тоже.
+из `CODEX_MODELS` (`id:Подпись` через запятую; какие есть — `model/list` у
+`codex app-server`) — поправь под свой доступ, `CODEX_DEFAULT_MODEL` тоже.
 
 Что gateway передаёт codex-cli (см. `providers/codex.ts`):
 
