@@ -133,7 +133,7 @@ wss.on('connection', (ws) => {
   })
 })
 
-http.listen(config.port, '0.0.0.0', () => {
+http.listen(config.port, config.host, () => {
   const p = providerList()
   console.log(`stultus-gateway ${VERSION} на :${config.port}; MCP для моделей ${config.mcpBase}/mcp/<id>`)
   console.log(`провайдеры: ${p.map((x) => `${x.label}${x.configured ? '' : ' (не настроен)'}`).join(', ')}`)
