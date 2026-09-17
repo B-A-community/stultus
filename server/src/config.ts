@@ -71,7 +71,7 @@ export const config = {
   codexHome: process.env.CODEX_HOME ?? `${process.env.HOME ?? process.env.USERPROFILE ?? '.'}/.codex`,
   // Список от `codex app-server` (model/list, 2026-09-17): gpt-6-astra, gpt-5.6-sol,
   // gpt-5.6-terra, gpt-5.6-luna, gpt-5.5, gpt-5.2. Подписи — как их зовут в бюро.
-  codexModels: parseModels(process.env.CODEX_MODELS ?? 'gpt-6-astra:Топовая,gpt-5.6-sol:Мощная,gpt-5.6-terra:Средняя,gpt-5.6-luna:Слабая'),
+  codexModels: parseModels(process.env.CODEX_MODELS ?? 'gpt-6-astra:GPT-6 Astra · Топовая,gpt-5.6-sol:GPT-5.6 Sol · Мощная,gpt-5.6-terra:GPT-5.6 Terra · Средняя,gpt-5.6-luna:GPT-5.6 Luna · Слабая'),
   codexDefaultModel: process.env.CODEX_DEFAULT_MODEL ?? 'gpt-6-astra',
 
   /** Native image generation via Codex login, separate from the chat provider. */
