@@ -81,6 +81,35 @@ cd /opt/stultus/app && git pull && cd server && npm ci && npm run build && sudo 
 Docker-вариант (`server/deploy/docker-compose.yml`) есть, но в бою не
 проверялся: используйте systemd.
 
+### VPS в интернете: за Caddy с TLS
+
+Проверено 2026-09-17 (Ubuntu 24.04, 2 vCPU, 2 ГБ, Codex и Claude уже
+залогинены под root). Отличия от локальной сети:
+
+- **Node 22 отдельно**, если системный старее: `mkdir -p /opt/node22 &&
+  curl -fsSL https://nodejs.org/dist/latest-v22.x/node-v22.x.y-linux-x64.tar.xz
+  | tar -xJ --strip-components=1 -C /opt/node22`, в unit
+  `ExecStart=/opt/node22/bin/node dist/index.js` и `Environment=PATH=/opt/node22/bin:…`.
+- **Gateway слушает только localhost**: в `.env` `HOST=127.0.0.1`. Наружу
+  открытый `ws://` с пропуском в чистом виде не выставлять.
+- **Caddy** даёт `wss://` с сертификатом Let's Encrypt и сам проксирует
+  WebSocket. Без своего домена подходит имя `<ip-через-дефисы>.sslip.io`,
+  например `185-68-185-107.sslip.io`:
+
+  ```bash
+  apt install -y caddy   # репозиторий: https://caddyserver.com/docs/install#debian-ubuntu-raspbian
+  printf '%s {\n\treverse_proxy 127.0.0.1:8790\n}\n' 185-68-185-107.sslip.io > /etc/caddy/Caddyfile
+  systemctl enable --now caddy && systemctl reload caddy
+  ufw allow 80/tcp && ufw allow 443/tcp
+  curl https://185-68-185-107.sslip.io/health
+  ```
+
+- В плагине адрес `wss://185-68-185-107.sslip.io/ws` и `PLUGIN_TOKEN` из
+  `.env`. Свой домен: заменить имя в Caddyfile и в плагине, ничего больше.
+- Прокси к OpenAI/Anthropic на зарубежном VPS не нужен.
+- Память: gateway ~260 МБ в простое, до 0,7 ГБ в пике на 8K; на 2 ГБ с
+  другими сервисами держите своп.
+
 ### Откат версии
 
 Каждое стабильное состояние помечено тегом `vX.Y.Z-stable` (сейчас
