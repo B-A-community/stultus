@@ -113,7 +113,7 @@ Docker-вариант (`server/deploy/docker-compose.yml`) есть, но в б�
 ### Откат версии
 
 Каждое стабильное состояние помечено тегом `vX.Y.Z-stable` (сейчас
-`v0.2.9-stable`, до режима «Большой кадр»). Откат сервера:
+`v0.2.9-stable`, до режима «Большой кадр»; `v0.2.10` — большой кадр 4K/6K/8K). Откат сервера:
 
 ```bash
 cd /opt/stultus/app && git fetch --tags && git checkout v0.2.9-stable && cd server && npm ci && npm run build && sudo systemctl restart stultus-gateway
