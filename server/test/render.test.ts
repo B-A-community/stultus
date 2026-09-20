@@ -53,3 +53,14 @@ test('cancel rejects pending capture and late screenshot is ignored', async () =
   assert.equal(conn.toolCalls, 1)
   conn.dispose()
 })
+test('consent wait: custom timeout and text reach the model, card gets timedOut', async () => {
+  const sent: any[] = []
+  const socket = { readyState: 1, OPEN: 1, send: (data: string) => sent.push(JSON.parse(data)) } as unknown as WebSocket
+  const conn = new PluginConnection(socket), controller = new AbortController()
+  conn.running = { turn: 1, signal: controller.signal, cancel: () => controller.abort() }
+  const result = await conn.callTool('render_viewport', { prompt: 'x' }, { timeoutMs: 50, timeoutText: 'Кнопку не нажали.' })
+  assert.equal(result.ok, false)
+  assert.equal(result.timedOut, true)
+  assert.equal(result.content, 'Кнопку не нажали.')
+  conn.dispose()
+})

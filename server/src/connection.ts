@@ -25,6 +25,15 @@ export interface ToolResult {
   prompt?: string
   /** Размер визуализации, выбранный в карточке: normal | large. */
   size?: string
+  /** Плагин не ответил вовремя (человек не нажал кнопку в карточке). */
+  timedOut?: boolean
+}
+
+export interface CallOptions {
+  /** Сколько ждать ответа плагина вместо TOOL_TIMEOUT_MS. */
+  timeoutMs?: number
+  /** Что сказать модели, если ответа не было. */
+  timeoutText?: string
 }
 
 /** Сообщения плагин → gateway. */
@@ -117,7 +126,7 @@ export class PluginConnection {
   }
 
   /** Попросить плагин выполнить инструмент и дождаться ответа. */
-  callTool(name: string, args: Record<string, unknown>): Promise<ToolResult> {
+  callTool(name: string, args: Record<string, unknown>, options: CallOptions = {}): Promise<ToolResult> {
     const signal = this.running?.signal
     if (signal?.aborted) return Promise.resolve({ ok: false, content: 'Ход остановлен.' })
     this.toolCalls++
@@ -142,9 +151,10 @@ export class PluginConnection {
         console.log(`[инструмент] ${name} → ${result.ok ? 'ok' : 'ОШИБКА'} за ${Math.round((Date.now() - started) / 100) / 10} с${result.ok ? '' : `: ${result.content.slice(0, 200)}`}`)
         resolve(result)
       }
+      const timeoutMs = options.timeoutMs ?? config.toolTimeoutMs
       const timer = setTimeout(() => {
-        this.resolveTool(call_id, { ok: false, content: `Плагин не ответил за ${Math.round(config.toolTimeoutMs / 1000)} с.` })
-      }, config.toolTimeoutMs)
+        this.resolveTool(call_id, { ok: false, timedOut: true, content: options.timeoutText ?? `Плагин не ответил за ${Math.round(timeoutMs / 1000)} с.` })
+      }, timeoutMs)
       const onAbort = () => this.resolveTool(call_id, { ok: false, content: 'Ход остановлен.' })
       this.pending.set(call_id, { resolve: finish, timer, cleanup: () => signal?.removeEventListener('abort', onAbort) })
       signal?.addEventListener('abort', onAbort, { once: true })

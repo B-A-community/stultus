@@ -33,7 +33,10 @@ window.StultusRender = function (api) {
   function status(msg) {
     var job = jobs[msg.id]; if (!job) return;
     job.card.querySelector('.card__text').textContent = msg.text;
-    if (msg.failed) { job.record.ok = false; job.card.classList.add('is-failed', 'is-done'); delete jobs[msg.id]; }
+    if (msg.failed) {
+      job.record.ok = false; job.card.classList.add('is-failed', 'is-done'); delete jobs[msg.id];
+      if (job.waiting) { job.waiting = false; api.attended(); }
+    }
   }
   function request(msg, record) {
     var id = msg.args.render_id;
@@ -81,7 +84,8 @@ window.StultusRender = function (api) {
       editor.focus();
       api.scroll();
     };
-    var job = jobs[id] = { card: card, record: record, source: null };
+    var job = jobs[id] = { card: card, record: record, source: null, waiting: true };
+    api.attention();
     function chosenPrompt() {
       var v = editor ? editor.value.trim() : '';
       return v || msg.args.prompt;
@@ -89,6 +93,7 @@ window.StultusRender = function (api) {
     allow.onclick = function () {
       if (jobs[id] !== job) return;
       var prompt = chosenPrompt();
+      job.waiting = false; api.attended();
       var size = select.value, chosen = null;
       sizes.forEach(function (s) { if (s.id === size) chosen = s; });
       var large = !!chosen, largeWidth = chosen ? chosen.width : 0;
@@ -118,7 +123,7 @@ window.StultusRender = function (api) {
     deny.onclick = function () {
       if (jobs[id] !== job) return;
       if (editor) { editor.remove(); editor = null; }
-      option.remove();
+      option.remove(); job.waiting = false; api.attended();
       record.ok = false; card.classList.add('is-done'); card.querySelector('.card__text').textContent = 'Создание визуализации отменено.'; delete jobs[id];
       api.send({ type: 'tool_result', call_id: msg.call_id, ok: false, content: 'Пользователь отменил визуализацию. Ничего не генерируй.' });
     };

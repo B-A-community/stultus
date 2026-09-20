@@ -7,6 +7,7 @@ import { getRecipe, listRecipes, saveRecipe } from './recipes.ts'
 import { randomUUID } from 'node:crypto'
 import { pngImage, renderConfigured, renderViewport, type RenderImage } from './render.ts'
 import { LARGE_SIZES, SIZE_IDS, largeGenerations, largeSize, largeSizeList, renderLarge } from './tiles.ts'
+import { config } from './config.ts'
 
 /**
  * MCP-сервер «stultus» — инструменты одного окна SketchUp.
@@ -50,7 +51,12 @@ function build(conn: PluginConnection): McpServer {
     try {
       if (!renderConfigured()) throw new Error('Генерация ещё не подключена: нужен вход Codex на gateway и RENDER_ENABLED=1.')
       if (!signal || signal.aborted) throw new Error('Визуализация доступна только в активном ходе пользователя.')
-      const shot = await conn.callTool('render_viewport', { prompt, render_id: id, size: size ?? 'normal', sizes: largeSizeList(), save_path: save_path || '' })
+      const minutes = Math.round(config.consentTimeoutMs / 60000)
+      const shot = await conn.callTool('render_viewport', { prompt, render_id: id, size: size ?? 'normal', sizes: largeSizeList(), save_path: save_path || '' }, {
+        timeoutMs: config.consentTimeoutMs,
+        timeoutText: `Пользователь не нажал «Зафиксировать и создать» за ${minutes} мин, визуализация не запускалась. Не жди и не вызывай инструмент повторно: скажи пользователю, что визуализация запускается этой кнопкой в карточке, и предложи попросить снова.`,
+      })
+      if (shot.timedOut) conn.send({ type: 'render_status', id, text: `Кнопку не нажали за ${minutes} мин, запрос снят. Попросите визуализацию ещё раз.`, failed: true })
       if (!shot.ok || !shot.image) return { content: [{ type: 'text' as const, text: shot.content || 'Пользователь не разрешил визуализацию.' }], isError: !shot.ok }
       signal.throwIfAborted()
       if (shot.capture?.framing !== 'viewport') throw new Error('Обновите плагин: снимок должен сохранять кадрирование вьюпорта.')
@@ -167,7 +173,10 @@ function build(conn: PluginConnection): McpServer {
       annotations: { readOnlyHint: true },
     },
     async ({ reason, view, zoom_extents }) => {
-      const r = await conn.callTool('take_screenshot', { reason, view: view === 'current' ? undefined : view, zoom_extents })
+      const r = await conn.callTool('take_screenshot', { reason, view: view === 'current' ? undefined : view, zoom_extents }, {
+        timeoutMs: config.consentTimeoutMs,
+        timeoutText: `Пользователь не ответил на запрос снимка за ${Math.round(config.consentTimeoutMs / 60000)} мин. Не жди и не повторяй: продолжай без снимка или закончи ход.`,
+      })
       const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [
         { type: 'text', text: r.content },
       ]

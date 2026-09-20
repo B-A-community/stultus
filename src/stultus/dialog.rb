@@ -106,6 +106,11 @@ module BACommunity
         end
 
         register(dialog, 'undo') { |_id, _p| Runner.undo }
+        # Карточка ждёт решения человека — поднять окно над SketchUp.
+        register(dialog, 'attention') do |_id, _p|
+          dialog.bring_to_front
+          { ok: true }
+        end
 
         # Рендер V-Ray идёт в фоне: ответ уходит, когда рендерер сообщит
         # об окончании, а не по возврату обработчика.

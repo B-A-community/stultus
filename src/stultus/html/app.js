@@ -96,7 +96,21 @@
   var $ = function (id) { return document.getElementById(id); };
   var app = $('app'), chat = $('chat'), input = $('input');
   var renders = window.StultusRender({ rb: rb, chat: chat, send: send, scroll: scrollDown, hideEmpty: hideEmpty,
-    persist: persist, remember: function (message) { finishCurrent(); state.messages.push(message); } });
+    persist: persist, remember: function (message) { finishCurrent(); state.messages.push(message); },
+    attention: attention, attended: attended });
+
+  // Карточка ждёт решения человека: подсказка под полем ввода и окно наверх,
+  // чтобы запрос не пропал за SketchUp. Пока ждём — модель стоит.
+  var waitingCards = 0;
+  function attention() {
+    waitingCards += 1;
+    hint('Модель ждёт вашего решения в карточке выше ↑');
+    rb('attention').catch(function () {});
+  }
+  function attended() {
+    waitingCards = Math.max(0, waitingCards - 1);
+    if (!waitingCards) hint('');
+  }
 
   // ---------- Рендер ------------------------------------------------------
   function escapeHtml(s) {
@@ -192,7 +206,7 @@
   }
 
   function setBusy(b) {
-    if (!b) renders.cancel();
+    if (!b) { renders.cancel(); if (waitingCards) { waitingCards = 0; hint(''); } }
     state.busy = b;
     app.dataset.state = b ? 'busy' : state.wsState;
     $('btnSend').disabled = b;
@@ -780,9 +794,10 @@
       (a.view ? '\nВид: ' + a.view : '') + (a.zoom_extents ? ' · показать всё' : '');
     card.querySelector('.card__text').textContent = desc;
     chat.appendChild(card); scrollDown();
+    attention();
 
     card.querySelector('[data-act="allow"]').onclick = function () {
-      card.classList.add('is-done');
+      card.classList.add('is-done'); attended();
       rb('screenshot', { view: a.view, zoom_extents: !!a.zoom_extents, width: 1280, height: 800 }).then(function (r) {
         if (!r || r.ok === false) {
           record.ok = false;
@@ -796,7 +811,7 @@
       });
     };
     card.querySelector('[data-act="deny"]').onclick = function () {
-      card.classList.add('is-done');
+      card.classList.add('is-done'); attended();
       record.ok = false;
       send({ type: 'tool_result', call_id: msg.call_id, ok: false, content: 'Пользователь отказал в снимке. Продолжай без него или спроси, что именно проверить.' });
     };
