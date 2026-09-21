@@ -6,24 +6,56 @@ window.StultusRender = function (api) {
   function element(tag, name, text) { var el = document.createElement(tag); el.className = name; if (text) el.textContent = text; return el; }
   // Миниатюра по клику раскрывается на всё окно; клик или Escape закрывает.
   var lightbox = null;
+  // Просмотр крупно: колесо — масштаб вокруг курсора (до ×8), средняя или
+  // правая кнопка — сдвиг, двойной клик — ×2/×1, клик по фону или Esc — закрыть.
+  var lightboxZoom = null;
   function openLightbox(src, alt) {
     closeLightbox();
     lightbox = element('div', 'lightbox');
     lightbox.setAttribute('role', 'dialog');
     lightbox.setAttribute('aria-label', alt || 'Изображение');
-    var img = element('img', 'lightbox__image'); img.src = src; img.alt = alt || '';
-    var hint = element('div', 'lightbox__hint', 'Клик или Esc — закрыть');
-    lightbox.appendChild(img); lightbox.appendChild(hint);
-    lightbox.onclick = closeLightbox;
+    var stage = element('div', 'lightbox__stage'), frame = element('div', 'lightbox__frame');
+    var img = element('img', 'lightbox__image'); img.src = src; img.alt = alt || ''; img.draggable = false;
+    var hint = element('div', 'lightbox__hint', 'Колесо — масштаб · средняя или правая кнопка — сдвиг · клик по фону или Esc — закрыть');
+    frame.appendChild(img); stage.appendChild(frame); lightbox.appendChild(stage); lightbox.appendChild(hint);
+    var scale = 1, tx = 0, ty = 0, panning = null;
+    function apply() { frame.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; hint.textContent = (scale > 1 ? '×' + scale.toFixed(1) + ' · ' : '') + 'Колесо — масштаб · средняя или правая кнопка — сдвиг · клик по фону или Esc — закрыть'; }
+    function setZoom(next, cx, cy) {
+      next = Math.max(1, Math.min(8, next));
+      var r = stage.getBoundingClientRect(), fx = cx - r.left - r.width / 2, fy = cy - r.top - r.height / 2;
+      var px = (fx - tx) / scale, py = (fy - ty) / scale;
+      scale = next; tx = fx - px * scale; ty = fy - py * scale;
+      if (scale === 1) { tx = 0; ty = 0; }
+      apply();
+    }
+    lightboxZoom = { inc: function () { var r = stage.getBoundingClientRect(); setZoom(scale * 1.25, r.left + r.width / 2, r.top + r.height / 2); }, dec: function () { var r = stage.getBoundingClientRect(); setZoom(scale / 1.25, r.left + r.width / 2, r.top + r.height / 2); }, reset: function () { setZoom(1, 0, 0); } };
+    stage.onwheel = function (e) { e.preventDefault(); setZoom(scale * Math.pow(1.15, -e.deltaY / 100), e.clientX, e.clientY); };
+    stage.onpointerdown = function (e) {
+      if (e.button === 1 || e.button === 2) { panning = { x: e.clientX - tx, y: e.clientY - ty }; stage.setPointerCapture(e.pointerId); e.preventDefault(); }
+    };
+    stage.onpointermove = function (e) { if (panning) { tx = e.clientX - panning.x; ty = e.clientY - panning.y; apply(); } };
+    stage.onpointerup = stage.onpointercancel = function () { panning = null; };
+    stage.oncontextmenu = function (e) { e.preventDefault(); };
+    img.ondblclick = function (e) { e.stopPropagation(); setZoom(scale > 1 ? 1 : 2, e.clientX, e.clientY); };
+    img.onclick = function (e) { e.stopPropagation(); };
+    frame.onclick = function (e) { e.stopPropagation(); };
+    stage.onclick = function (e) { if (e.target === stage) closeLightbox(); };
+    hint.onclick = closeLightbox;
+    lightbox.onclick = function (e) { if (e.target === lightbox) closeLightbox(); };
     document.body.appendChild(lightbox);
     document.addEventListener('keydown', onLightboxKey);
   }
   function closeLightbox() {
     if (!lightbox) return;
-    lightbox.remove(); lightbox = null;
+    lightbox.remove(); lightbox = null; lightboxZoom = null;
     document.removeEventListener('keydown', onLightboxKey);
   }
-  function onLightboxKey(e) { if (e.key === 'Escape') { e.preventDefault(); closeLightbox(); } }
+  function onLightboxKey(e) {
+    if (e.key === 'Escape') { e.preventDefault(); closeLightbox(); }
+    else if (lightboxZoom && (e.key === '+' || e.key === '=')) { e.preventDefault(); lightboxZoom.inc(); }
+    else if (lightboxZoom && e.key === '-') { e.preventDefault(); lightboxZoom.dec(); }
+    else if (lightboxZoom && e.key === '0') { e.preventDefault(); lightboxZoom.reset(); }
+  }
   window.StultusLightbox = openLightbox;
   function zoomable(img) {
     img.classList.add('is-zoomable');
@@ -272,7 +304,7 @@ window.StultusRender = function (api) {
     card.classList.add('card--render', 'is-done');
     card.querySelector('.card__title').textContent = 'Дорабатываю область';
     card.querySelector('.card__text').textContent = 'Область ' + p.pct + '% кадра · влияние ' + p.strength + (p.references ? ' · видов: ' + p.references.length : '') + '\n\nЗадание: ' + p.prompt;
-    var stop = element('button', 'btn', 'Остановить'); stop.onclick = function () { api.send({ type: 'render_cancel', id: id }); };
+    var stop = element('button', 'btn card__stop', 'Остановить'); stop.onclick = function () { api.send({ type: 'render_cancel', id: id }); };
     card.appendChild(stop);
     var record = { name: 'render_edit', label: 'Доработка области', ok: null };
     jobs[id] = { card: card, record: record, source: p.base, camera: p.camera, capture: p.capture, prompt: p.prompt, edit: true, stopButton: stop };

@@ -9,7 +9,7 @@ import { deleteRecipe, listRecipes } from './recipes.ts'
 import { renderConfigured } from './render.ts'
 import { cancelAllEdits, cancelEdit, runEdit } from './edit.ts'
 
-const VERSION = '0.2.16'
+const VERSION = '0.2.17'
 
 /** Живые окна SketchUp по id соединения. */
 const connections = new Map<string, PluginConnection>()
