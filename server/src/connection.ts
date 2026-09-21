@@ -27,9 +27,9 @@ export interface ToolResult {
   size?: string
   /** Плагин не ответил вовремя (человек не нажал кнопку в карточке). */
   timedOut?: boolean
-  /** Маска области (PNG base64), референс стиля (PNG base64), сила задания 0–100 — из карточки. */
+  /** Маска области (PNG base64), референсы стиля (PNG base64, до 10), сила задания 0–100 — из карточки. */
   mask?: string
-  reference?: string
+  references?: string[]
   strength?: number
 }
 
@@ -54,9 +54,9 @@ export type PluginMessage =
       /** Картинки пользователя — оригиналы, base64. */
       attachments?: Array<{ name: string; mime: string; base64: string }>
     }
-  | { type: 'tool_result'; call_id: string; ok: boolean; content?: string; image?: { mime: string; base64: string }; capture?: ToolResult['capture']; prompt?: string; size?: string; mask?: string; reference?: string; strength?: number }
+  | { type: 'tool_result'; call_id: string; ok: boolean; content?: string; image?: { mime: string; base64: string }; capture?: ToolResult['capture']; prompt?: string; size?: string; mask?: string; references?: string[]; strength?: number }
   /** Доработка готового кадра из окна, без хода модели: база — картинка, маска, референс, сила. */
-  | { type: 'render_edit'; id: string; prompt: string; base: string; mask?: string; reference?: string; strength?: number }
+  | { type: 'render_edit'; id: string; prompt: string; base: string; mask?: string; references?: string[]; strength?: number }
   | { type: 'render_cancel'; id: string }
   | { type: 'cancel' }
   | { type: 'recipe_delete'; id: string }

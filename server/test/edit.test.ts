@@ -22,14 +22,16 @@ test('strength tiers: clamp, default 60 → normal, extremes', () => {
 
 test('prompt clauses name mask and reference images in order', async () => {
   const img = pngImage((await solid(4, 4, [1, 2, 3])).toString('base64'))
-  const both = editClauses({ mask: img, reference: img, strength: 30 })
+  const both = editClauses({ mask: img, references: [img], strength: 30 })
   assert.match(both[0]!, /SECOND attached image .* EDITABLE REGION/)
   assert.match(both[1]!, /THIRD attached image is a STYLE REFERENCE/)
   assert.match(both[2]!, /RESTRAINED/)
-  const refOnly = editClauses({ reference: img })
+  const refOnly = editClauses({ references: [img] })
   assert.match(refOnly[0]!, /SECOND attached image is a STYLE REFERENCE/)
+  const many = editClauses({ mask: img, references: [img, img, img] })
+  assert.match(many[1]!, /THIRD to FIFTH attached images \(3 images\) are STYLE REFERENCES/)
   // В плитке картинки: плитка, эталон, референс — референс третий.
-  assert.match(tilePrompt('x', 'pos', { reference: img }), /THIRD attached image is a STYLE REFERENCE/)
+  assert.match(tilePrompt('x', 'pos', { references: [img] }), /THIRD attached image is a STYLE REFERENCE/)
   assert.match(postproductionPrompt('brief', { strength: 5 }), /MINIMAL/)
 })
 
@@ -62,8 +64,8 @@ test('renderViewport with mask: generator gets target + overlay + reference, out
     seen = sources.map(s => s.split(/[\\/]/).pop()!); seenPrompt = prompt
     return pngImage((await solid(64, 32, [250, 0, 0])).toString('base64'))
   }
-  const out = await renderViewport(source, 'вечер', AbortSignal.timeout(5000), { mask, reference, strength: 95 }, generate)
-  assert.deepEqual(seen, ['viewport.png', 'editable-region.png', 'style-reference.png'])
+  const out = await renderViewport(source, 'вечер', AbortSignal.timeout(5000), { mask, references: [reference, reference], strength: 95 }, generate)
+  assert.deepEqual(seen, ['viewport.png', 'editable-region.png', 'style-reference-1.png', 'style-reference-2.png'])
   assert.match(seenPrompt, /MAXIMUM/)
   const { data } = await sharp(Buffer.from(out.base64, 'base64')).removeAlpha().raw().toBuffer({ resolveWithObject: true })
   assert.deepEqual(px(data, 64, 60, 16), [50, 60, 70])

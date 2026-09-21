@@ -36,10 +36,10 @@ export async function runEdit(conn: PluginConnection, msg: EditMessage): Promise
     const prompt = String(msg.prompt ?? '').trim().slice(0, 6000) || 'Доработать отмеченную область, сохранив всё остальное.'
     const opts: EditOptions = {
       mask: msg.mask ? pngImage(msg.mask) : undefined,
-      reference: msg.reference ? pngImage(msg.reference) : undefined,
+      references: Array.isArray(msg.references) && msg.references.length ? msg.references.filter(r => typeof r === 'string').slice(0, 10).map(pngImage) : undefined,
       strength: typeof msg.strength === 'number' ? msg.strength : undefined,
     }
-    console.log(`[доработка] ${id.slice(0, 8)} ${base.width}×${base.height}${opts.mask ? ' по маске' : ''}${opts.reference ? ' с референсом' : ''}`)
+    console.log(`[доработка] ${id.slice(0, 8)} ${base.width}×${base.height}${opts.mask ? ' по маске' : ''}${opts.references?.length ? ` с референсами (${opts.references.length})` : ''}`)
     conn.send({ type: 'render_status', id, text: opts.mask ? 'Дорабатываю отмеченную область…' : 'Создаю новую версию кадра…' })
     const image = await renderViewport(base, prompt, controller.signal, opts)
     controller.signal.throwIfAborted()

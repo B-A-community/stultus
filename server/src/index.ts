@@ -9,7 +9,7 @@ import { deleteRecipe, listRecipes } from './recipes.ts'
 import { renderConfigured } from './render.ts'
 import { cancelAllEdits, cancelEdit, runEdit } from './edit.ts'
 
-const VERSION = '0.2.15'
+const VERSION = '0.2.16'
 
 /** Живые окна SketchUp по id соединения. */
 const connections = new Map<string, PluginConnection>()
@@ -114,7 +114,7 @@ wss.on('connection', (ws) => {
         void runChat(conn, msg)
         break
       case 'tool_result':
-        conn.resolveTool(msg.call_id, { ok: msg.ok, content: msg.content ?? '', image: msg.image, capture: msg.capture, prompt: msg.prompt, size: msg.size, mask: msg.mask, reference: msg.reference, strength: msg.strength })
+        conn.resolveTool(msg.call_id, { ok: msg.ok, content: msg.content ?? '', image: msg.image, capture: msg.capture, prompt: msg.prompt, size: msg.size, mask: msg.mask, references: Array.isArray(msg.references) ? msg.references.filter(r => typeof r === 'string').slice(0, 10) : undefined, strength: msg.strength })
         break
       case 'cancel':
         conn.running?.cancel()

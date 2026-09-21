@@ -23,7 +23,10 @@
 
 /* Область, референс, влияние задания в карточке запроса и в доработке. */
 .card__region,.card__reference{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.card__reference-thumb{height:44px;border-radius:6px;border:1px solid var(--line)}
+.card__reference-list{display:flex;gap:6px;flex-wrap:wrap;flex-basis:100%}.card__reference-list[hidden]{display:none}
+.card__reference-item{position:relative;display:inline-block}
+.card__reference-thumb{height:48px;width:64px;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block}
+.card__reference-drop{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font-size:12px;line-height:1;padding:0;cursor:pointer}
 .card__strength{gap:10px}.card__strength input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}.card__strength-value{font-size:11px;color:var(--muted);flex-basis:100%}
 .render__refine{padding:12px 14px;border-top:1px solid var(--line)}.render__refine .card__options{margin-top:10px}
 /* Рисовалка маски: поверх всего окна, кадр по центру, панель внизу. */
@@ -57,3 +60,9 @@
 .mask__sliders,.mask__tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .mask__sliders .mask__size{flex:1 1 200px}.mask__sliders .mask__size input{flex:1;width:auto;min-width:80px}
 .mask__step{padding:6px 9px;line-height:0}.mask__step svg{width:22px;height:22px;display:block}.mask__step:disabled{opacity:.35}
+/* Форма доработки: заголовок, поле во всю ширину, настройки рядами. */
+.render__refine{padding:12px 14px 14px;border-top:1px solid var(--line);background:var(--surface-2)}
+.render__refine-title{font-size:11px;font-weight:500;color:var(--text-2);margin-bottom:8px;letter-spacing:.2px}
+.render__refine-text{display:block;width:100%;box-sizing:border-box;min-height:84px;margin:0 0 10px;padding:10px 12px;resize:vertical;font:inherit;font-size:13px;line-height:1.5;color:var(--text);background:var(--input-bg);border:1px solid var(--line);border-radius:10px}
+.render__refine-text:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.render__refine .card__option{margin:6px 0}

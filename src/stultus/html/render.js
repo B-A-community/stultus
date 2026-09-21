@@ -44,33 +44,48 @@ window.StultusRender = function (api) {
     return { el: wrap, value: function () { return Number(range.value); }, disable: function () { range.disabled = true; } };
   }
   function stripPrefix(dataUrl) { return String(dataUrl || '').replace(/^data:image\/\w+;base64,/, ''); }
-  // Референс стиля: файл → PNG не шире 1600 px (в генератор больше не нужно).
+  // Референсы стиля («Добавить вид…»): до 10 картинок, каждая → PNG не шире
+  // 1600 px, миниатюры с крестиком. Генератор берёт из них стиль, не объекты.
+  var MAX_REFERENCES = 10;
   function referenceControl() {
     var wrap = element('div', 'card__option card__reference');
-    var input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.hidden = true;
-    var pick = element('button', 'btn', 'Референс стиля…'), thumb = element('img', 'card__reference-thumb'), drop = element('button', 'btn', '×');
-    thumb.hidden = true; drop.hidden = true; drop.title = 'Убрать референс';
-    var data = null;
-    pick.onclick = function () { input.click(); };
-    input.onchange = function () {
-      var file = input.files && input.files[0]; if (!file) return;
+    var input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.multiple = true; input.hidden = true;
+    var pick = element('button', 'btn', 'Добавить вид…'), list = element('div', 'card__reference-list'), count = element('span', 'card__option-hint', '');
+    var items = [];
+    function render() {
+      list.innerHTML = '';
+      items.forEach(function (it, i) {
+        var cell = element('span', 'card__reference-item');
+        var thumb = element('img', 'card__reference-thumb'); thumb.src = it.data; thumb.alt = it.name; thumb.title = it.name;
+        var drop = element('button', 'card__reference-drop', '×'); drop.title = 'Убрать ' + it.name; drop.setAttribute('aria-label', 'Убрать ' + it.name);
+        drop.onclick = function () { items.splice(i, 1); render(); };
+        cell.appendChild(thumb); cell.appendChild(drop); list.appendChild(cell);
+      });
+      count.textContent = items.length ? 'Видов: ' + items.length + ' из ' + MAX_REFERENCES + '. Генератор берёт из них свет, материалы и атмосферу, не объекты.' : '';
+      pick.disabled = items.length >= MAX_REFERENCES;
+      list.hidden = !items.length;
+    }
+    function add(file) {
+      if (items.length >= MAX_REFERENCES) return;
       var reader = new FileReader();
       reader.onload = function () {
         var im = new Image();
         im.onload = function () {
+          if (items.length >= MAX_REFERENCES) return;
           var k = Math.min(1, 1600 / im.naturalWidth), c = document.createElement('canvas');
           c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
           c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
-          data = c.toDataURL('image/png'); thumb.src = data; thumb.hidden = false; drop.hidden = false; pick.textContent = 'Референс: ' + file.name;
+          items.push({ name: file.name, data: c.toDataURL('image/png') }); render();
         };
         im.src = reader.result;
       };
       reader.readAsDataURL(file);
-      input.value = '';
-    };
-    drop.onclick = function () { data = null; thumb.hidden = true; drop.hidden = true; pick.textContent = 'Референс стиля…'; };
-    wrap.appendChild(input); wrap.appendChild(pick); wrap.appendChild(thumb); wrap.appendChild(drop);
-    return { el: wrap, value: function () { return data ? stripPrefix(data) : null; }, disable: function () { pick.disabled = drop.disabled = true; } };
+    }
+    pick.onclick = function () { input.click(); };
+    input.onchange = function () { [].slice.call(input.files || []).slice(0, MAX_REFERENCES - items.length).forEach(add); input.value = ''; };
+    wrap.appendChild(input); wrap.appendChild(pick); wrap.appendChild(count); wrap.appendChild(list);
+    render();
+    return { el: wrap, value: function () { return items.length ? items.map(function (it) { return stripPrefix(it.data); }) : null; }, disable: function () { pick.disabled = true; } };
   }
   function status(msg) {
     var job = jobs[msg.id]; if (!job) return;
@@ -167,7 +182,7 @@ window.StultusRender = function (api) {
       allow.disabled = deny.disabled = edit.disabled = select.disabled = true;
       if (editor) { editor.remove(); editor = null; }
       edit.hidden = true; option.remove();
-      var extras = { strength: strength.value(), reference: reference.value(), mask: mask ? stripPrefix(mask) : null };
+      var extras = { strength: strength.value(), references: reference.value(), mask: mask ? stripPrefix(mask) : null };
       job.extras = extras;
       region.remove(); reference.el.remove(); strength.el.remove();
       card.querySelector('.card__text').textContent = large ? 'Фиксирую текущий кадр в ' + largeWidth + ' px…' : 'Фиксирую текущий кадр…';
@@ -178,13 +193,13 @@ window.StultusRender = function (api) {
         var preview = card.querySelector('.card__preview'); preview.src = imageUrl(r.base64); preview.hidden = false; zoomable(preview);
         card.classList.add('is-done');
         card.querySelector('.card__title').textContent = 'Кадр зафиксирован';
-        var tail = (extras.mask ? ' · только область' : '') + (extras.reference ? ' · референс' : '') + ' · влияние ' + extras.strength;
+        var tail = (extras.mask ? ' · только область' : '') + (extras.references ? ' · видов: ' + extras.references.length : '') + ' · влияние ' + extras.strength;
         card.querySelector('.card__text').textContent = r.width + ' × ' + r.height + (large ? ' · большой кадр, собираю из плиток…' : ' · создаю визуализацию…') + tail + '\n\nЗадание: ' + prompt;
         var edited = prompt !== msg.args.prompt;
         api.send({ type: 'tool_result', call_id: msg.call_id, ok: true,
-          content: (edited ? 'Точный кадр вьюпорта разрешён для постпродакшна. Пользователь изменил задание, в генерацию уходит его текст.' : 'Точный кадр вьюпорта разрешён для постпродакшна.') + (large ? ' Пользователь выбрал большой кадр.' : '') + (extras.mask ? ' Пользователь отметил область: меняется только она.' : '') + (extras.reference ? ' Приложен референс стиля.' : ''),
+          content: (edited ? 'Точный кадр вьюпорта разрешён для постпродакшна. Пользователь изменил задание, в генерацию уходит его текст.' : 'Точный кадр вьюпорта разрешён для постпродакшна.') + (large ? ' Пользователь выбрал большой кадр.' : '') + (extras.mask ? ' Пользователь отметил область: меняется только она.' : '') + (extras.references ? ' Приложены референсы стиля: ' + extras.references.length + '.' : ''),
           image: { mime: r.mime, base64: r.base64 }, capture: { framing: r.framing, width: r.width, height: r.height }, prompt: prompt, size: large ? size : 'normal',
-          mask: extras.mask || undefined, reference: extras.reference || undefined, strength: extras.strength });
+          mask: extras.mask || undefined, references: extras.references || undefined, strength: extras.strength });
         api.scroll();
       }).catch(function (error) {
         if (jobs[id] !== job) return;
@@ -232,17 +247,18 @@ window.StultusRender = function (api) {
       if (!current.result) return;
       window.StultusMask.open({ src: imageUrl(current.result), onDone: function (maskUrl, pct) {
         var form = element('div', 'render__refine');
-        var ta = element('textarea', 'card__editor'); ta.rows = 3; ta.value = ''; ta.placeholder = 'Что изменить в отмеченной области (' + pct + '% кадра)?'; ta.setAttribute('aria-label', 'Задание для доработки');
+        var head = element('div', 'render__refine-title', 'Доработка области · ' + pct + '% кадра');
+        var ta = element('textarea', 'render__refine-text'); ta.rows = 3; ta.value = ''; ta.placeholder = 'Что изменить в отмеченной области? Например: «замени окно на витраж во всю стену»'; ta.setAttribute('aria-label', 'Задание для доработки');
         var strength = strengthControl(70), reference = referenceControl();
         var row = element('div', 'card__options'), go = element('button', 'btn btn--primary', 'Создать ↗'), no = element('button', 'btn', 'Отмена');
         row.appendChild(go); row.appendChild(no);
-        form.appendChild(ta); form.appendChild(reference.el); form.appendChild(strength.el); form.appendChild(row);
+        form.appendChild(head); form.appendChild(ta); form.appendChild(reference.el); form.appendChild(strength.el); form.appendChild(row);
         el.insertBefore(form, info); ta.focus();
         no.onclick = function () { form.remove(); };
         go.onclick = function () {
           var text = ta.value.trim() || (prompt || 'Доработать отмеченную область, сохранив всё остальное.');
           form.remove();
-          startEdit({ base: current.result, camera: current.camera, capture: current.capture, prompt: text, mask: stripPrefix(maskUrl), reference: reference.value(), strength: strength.value(), pct: pct });
+          startEdit({ base: current.result, camera: current.camera, capture: current.capture, prompt: text, mask: stripPrefix(maskUrl), references: reference.value(), strength: strength.value(), pct: pct });
         };
       } });
     };
@@ -255,13 +271,13 @@ window.StultusRender = function (api) {
     var card = document.getElementById('tplShot').content.firstElementChild.cloneNode(true);
     card.classList.add('card--render', 'is-done');
     card.querySelector('.card__title').textContent = 'Дорабатываю область';
-    card.querySelector('.card__text').textContent = 'Область ' + p.pct + '% кадра · влияние ' + p.strength + (p.reference ? ' · референс' : '') + '\n\nЗадание: ' + p.prompt;
+    card.querySelector('.card__text').textContent = 'Область ' + p.pct + '% кадра · влияние ' + p.strength + (p.references ? ' · видов: ' + p.references.length : '') + '\n\nЗадание: ' + p.prompt;
     var stop = element('button', 'btn', 'Остановить'); stop.onclick = function () { api.send({ type: 'render_cancel', id: id }); };
     card.appendChild(stop);
     var record = { name: 'render_edit', label: 'Доработка области', ok: null };
     jobs[id] = { card: card, record: record, source: p.base, camera: p.camera, capture: p.capture, prompt: p.prompt, edit: true, stopButton: stop };
     api.hideEmpty(); api.chat.appendChild(card); api.scroll();
-    api.send({ type: 'render_edit', id: id, prompt: p.prompt, base: p.base, mask: p.mask, reference: p.reference || undefined, strength: p.strength });
+    api.send({ type: 'render_edit', id: id, prompt: p.prompt, base: p.base, mask: p.mask, references: p.references || undefined, strength: p.strength });
   }
   // Полные большие кадры приходят кусками после render_result; куски пишет
   // Ruby в файл по порядку, окно только передаёт их дальше по одному.

@@ -16,7 +16,7 @@ import sharp from 'sharp'
 import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { config } from './config.ts'
-import { applyMask, auxImage, pngImage, postproductionPrompt, runNative, tilePrompt, type EditOptions, type RenderImage } from './render.ts'
+import { MAX_REFERENCES, applyMask, auxImage, pngImage, postproductionPrompt, runNative, tilePrompt, type EditOptions, type RenderImage } from './render.ts'
 
 export interface Grid { cols: number; rows: number }
 export interface Tile { col: number; row: number; left: number; top: number; width: number; height: number }
@@ -166,11 +166,11 @@ export async function renderLarge(size: LargeSize, source: RenderImage, prompt: 
     const basePath = join(directory, 'base.png')
     await writeFile(basePath, await sharp(full).resize({ width: Math.min(GENERATOR_WIDTH, width) }).png().toBuffer(), { mode: 0o600 })
     // Референс стиля идёт и в эталон, и в каждую плитку; маска — только на сборку.
-    const styleOpts: EditOptions = { reference: opts.reference, strength: opts.strength }
+    const styleOpts: EditOptions = { references: opts.references, strength: opts.strength }
     const refPaths: string[] = []
-    if (opts.reference) {
-      const referencePath = join(directory, 'style-reference.png')
-      await writeFile(referencePath, await auxImage(opts.reference), { mode: 0o600 })
+    for (const [i, reference] of (opts.references ?? []).slice(0, MAX_REFERENCES).entries()) {
+      const referencePath = join(directory, `style-reference-${i + 1}.png`)
+      await writeFile(referencePath, await auxImage(reference), { mode: 0o600 })
       refPaths.push(referencePath)
     }
     const base = await withRetry(() => generate([basePath, ...refPaths], directory, postproductionPrompt(prompt, styleOpts), perCall()), total)

@@ -26,7 +26,7 @@ export const MCP_SERVER_NAME = 'stultus'
 export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'render_vray', 'scenes', 'save_recipe', 'get_recipe', 'undo', 'ask_user'] as const
 
 function build(conn: PluginConnection): McpServer {
-  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.15' })
+  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.16' })
 
   server.registerTool('render_viewport', {
     title: 'Визуализация текущего кадра',
@@ -68,10 +68,10 @@ function build(conn: PluginConnection): McpServer {
       // Дополнения из карточки: маска области, референс стиля, сила задания.
       const opts: EditOptions = {
         mask: shot.mask ? pngImage(shot.mask) : undefined,
-        reference: shot.reference ? pngImage(shot.reference) : undefined,
+        references: shot.references?.length ? shot.references.map(pngImage) : undefined,
         strength: typeof shot.strength === 'number' ? shot.strength : undefined,
       }
-      const extras = [opts.mask ? 'меняется только отмеченная область' : '', opts.reference ? 'по референсу стиля' : '', `сила задания ${strengthTier(opts.strength).value}/100 (${strengthTier(opts.strength).label})`].filter(Boolean).join(', ')
+      const extras = [opts.mask ? 'меняется только отмеченная область' : '', opts.references?.length ? `по референсам стиля (${opts.references.length})` : '', `сила задания ${strengthTier(opts.strength).value}/100 (${strengthTier(opts.strength).label})`].filter(Boolean).join(', ')
       let shown: RenderImage, sourceShown = source, note = '', width: number, height: number
       if (large) {
         const label = LARGE_SIZES[large].label

@@ -30,8 +30,8 @@ export function pngImage(base64: string): RenderImage {
 export interface EditOptions {
   /** Маска: белое — менять, чёрное — оставить. Любой размер, масштабируется к исходнику. */
   mask?: RenderImage
-  /** Референс стиля: свет, материалы, палитра, атмосфера. */
-  reference?: RenderImage
+  /** Референсы стиля (до MAX_REFERENCES): свет, материалы, палитра, атмосфера. */
+  references?: RenderImage[]
   /** Влияние задания 0–100: сколько свободы у генератора. По умолчанию 60. */
   strength?: number
 }
@@ -50,19 +50,24 @@ export function strengthTier(strength: number | undefined): { value: number; lab
   return { value, label: tier.label, clause: tier.clause }
 }
 
-/** Фразы про роли картинок и силу задания; порядок картинок: цель, [маска], [референс]. */
+export const MAX_REFERENCES = 10
+
+/** Фразы про роли картинок и силу задания; порядок картинок: цель, [маска], [референсы…]. */
 export function editClauses(opts: EditOptions, target: 'frame' | 'tile' = 'frame'): string[] {
   const out: string[] = []
   let index = target === 'tile' ? 3 : 2
-  const ordinal = (n: number) => ['FIRST', 'SECOND', 'THIRD', 'FOURTH'][n - 1] ?? `${n}th`
+  const ordinal = (n: number) => ['FIRST', 'SECOND', 'THIRD', 'FOURTH', 'FIFTH', 'SIXTH', 'SEVENTH', 'EIGHTH', 'NINTH', 'TENTH', 'ELEVENTH', 'TWELFTH', 'THIRTEENTH'][n - 1] ?? `${n}th`
   if (opts.mask && target === 'frame') {
     out.push(`The ${ordinal(index)} attached image is the SAME frame with the EDITABLE REGION tinted magenta. Change ONLY what is inside the tinted region; everything outside it must stay pixel-identical to the first image. Blend the edited region seamlessly into its surroundings.`)
     index++
   }
-  if (opts.reference) {
+  const refs = (opts.references ?? []).length
+  if (refs === 1) {
     out.push(`The ${ordinal(index)} attached image is a STYLE REFERENCE: borrow its lighting, materials, colour palette, mood and rendering style. Do NOT copy its objects, buildings or composition.`)
-    index++
+  } else if (refs > 1) {
+    out.push(`The ${ordinal(index)} to ${ordinal(index + refs - 1)} attached images (${refs} images) are STYLE REFERENCES: borrow their common lighting, materials, colour palette, mood and rendering style. Do NOT copy their objects, buildings or composition.`)
   }
+  index += refs
   out.push(strengthTier(opts.strength).clause)
   return out
 }
@@ -78,7 +83,7 @@ export function tilePrompt(prompt: string, position: string, opts: EditOptions =
     'Use the built-in image generation tool to EDIT the FIRST attached image. It is one tile of a SketchUp viewport, cropped from a larger frame; this is sketch-to-render postproduction at higher detail, not a new design.',
     `Tile position in the full frame: ${position}. The tile edges are arbitrary cuts, not composition borders: continue surfaces and lines straight to the edges, do not add borders, vignettes or framing.`,
     'The SECOND attached image is the SAME tile cut from an already finished visualization of the whole frame. Match its lighting, sky, materials, colours, shadows and atmosphere exactly, so that neighbouring tiles join seamlessly. Add finer detail and sharpness, do not change the look.',
-    ...editClauses({ reference: opts.reference, strength: opts.strength }, 'tile'),
+    ...editClauses({ references: opts.references, strength: opts.strength }, 'tile'),
     'HARD CONSTRAINT — geometry is fixed: every edge, opening and silhouette of the first image must stay at the same pixel position and size. Do not zoom, shift, rotate, re-crop or change the aspect ratio. Do not invent buildings, windows or structural elements.',
     'Remove SketchUp selection outlines, axes and editor annotations. Generate exactly one opaque PNG with the same aspect ratio as the first image.',
     'Do not call APIs, run shell commands, write code, or simulate generation with drawings. If image generation is unavailable, report the actual error and stop.',
@@ -299,9 +304,9 @@ export async function renderViewport(source: RenderImage, prompt: string, signal
       await writeFile(overlayPath, await maskOverlay(full, Buffer.from(opts.mask.base64, 'base64')), { mode: 0o600 })
       sources.push(overlayPath)
     }
-    if (opts.reference) {
-      const referencePath = join(directory, 'style-reference.png')
-      await writeFile(referencePath, await auxImage(opts.reference), { mode: 0o600 })
+    for (const [i, reference] of (opts.references ?? []).slice(0, MAX_REFERENCES).entries()) {
+      const referencePath = join(directory, `style-reference-${i + 1}.png`)
+      await writeFile(referencePath, await auxImage(reference), { mode: 0o600 })
       sources.push(referencePath)
     }
     const image = await generate(sources, directory, postproductionPrompt(prompt, opts), AbortSignal.any([signal, AbortSignal.timeout(config.renderTimeoutMs)]))
