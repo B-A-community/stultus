@@ -9,8 +9,8 @@
 .is-zoomable{cursor:zoom-in}
 .lightbox{position:fixed;inset:0;z-index:50;display:flex;align-items:stretch;justify-content:center;flex-direction:column;gap:8px;padding:12px;background:rgba(10,11,10,.92)}
 .lightbox__stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:zoom-out;touch-action:none}
-.lightbox__frame{transform-origin:center center;will-change:transform;cursor:default}
-.lightbox__image{display:block;max-width:calc(100vw - 24px);max-height:calc(100vh - 60px);object-fit:contain;border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.6);user-select:none}
+.lightbox__frame{cursor:default;flex:none}
+.lightbox__image{display:block;border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.6);user-select:none;image-rendering:auto}
 .lightbox__hint{font:10px var(--mono);letter-spacing:1px;color:var(--muted);text-align:center;cursor:pointer}
 .render__prompt{padding:10px 14px;border-bottom:1px solid var(--line);font-size:12px;line-height:1.5;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere}
 /* Строка размышления модели: текст переносится, а не уезжает вбок как код. */

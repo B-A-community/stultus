@@ -8,7 +8,7 @@ window.StultusRender = function (api) {
   var lightbox = null;
   // Просмотр крупно: колесо — масштаб вокруг курсора (до ×8), средняя или
   // правая кнопка — сдвиг, двойной клик — ×2/×1, клик по фону или Esc — закрыть.
-  var lightboxZoom = null;
+  var lightboxZoom = null, lightboxResize = null;
   function openLightbox(src, alt) {
     closeLightbox();
     lightbox = element('div', 'lightbox');
@@ -18,8 +18,22 @@ window.StultusRender = function (api) {
     var img = element('img', 'lightbox__image'); img.src = src; img.alt = alt || ''; img.draggable = false;
     var hint = element('div', 'lightbox__hint', 'Колесо — масштаб · средняя или правая кнопка — сдвиг · клик по фону или Esc — закрыть');
     frame.appendChild(img); stage.appendChild(frame); lightbox.appendChild(stage); lightbox.appendChild(hint);
-    var scale = 1, tx = 0, ty = 0, panning = null;
-    function apply() { frame.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; hint.textContent = (scale > 1 ? '×' + scale.toFixed(1) + ' · ' : '') + 'Колесо — масштаб · средняя или правая кнопка — сдвиг · клик по фону или Esc — закрыть'; }
+    // Масштаб — размером картинки, а не CSS-трансформацией: при transform:scale
+    // браузер растягивает уже отрисованный растр, и при ×5 полный файл выглядит
+    // мыльно. Здесь картинка перерисовывается в нужном размере из исходника.
+    var scale = 1, tx = 0, ty = 0, panning = null, fitW = 0, fitH = 0;
+    function fit() {
+      if (!img.naturalWidth) return;
+      var maxW = stage.clientWidth - 8, maxH = stage.clientHeight - 8;
+      var k = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
+      fitW = Math.round(img.naturalWidth * k); fitH = Math.round(img.naturalHeight * k);
+      apply();
+    }
+    function apply() {
+      img.style.width = Math.round(fitW * scale) + 'px'; img.style.height = Math.round(fitH * scale) + 'px';
+      frame.style.transform = 'translate(' + Math.round(tx) + 'px,' + Math.round(ty) + 'px)';
+      hint.textContent = (scale > 1 ? '×' + scale.toFixed(1) + ' · ' : '') + 'Колесо — масштаб · средняя или правая кнопка — сдвиг · клик по фону или Esc — закрыть';
+    }
     function setZoom(next, cx, cy) {
       next = Math.max(1, Math.min(8, next));
       var r = stage.getBoundingClientRect(), fx = cx - r.left - r.width / 2, fy = cy - r.top - r.height / 2;
@@ -28,6 +42,7 @@ window.StultusRender = function (api) {
       if (scale === 1) { tx = 0; ty = 0; }
       apply();
     }
+    img.onload = fit; lightboxResize = fit; window.addEventListener('resize', fit); if (img.complete) fit();
     lightboxZoom = { inc: function () { var r = stage.getBoundingClientRect(); setZoom(scale * 1.25, r.left + r.width / 2, r.top + r.height / 2); }, dec: function () { var r = stage.getBoundingClientRect(); setZoom(scale / 1.25, r.left + r.width / 2, r.top + r.height / 2); }, reset: function () { setZoom(1, 0, 0); } };
     stage.onwheel = function (e) { e.preventDefault(); setZoom(scale * Math.pow(1.15, -e.deltaY / 100), e.clientX, e.clientY); };
     stage.onpointerdown = function (e) {
@@ -49,6 +64,7 @@ window.StultusRender = function (api) {
     if (!lightbox) return;
     lightbox.remove(); lightbox = null; lightboxZoom = null;
     document.removeEventListener('keydown', onLightboxKey);
+    if (lightboxResize) { window.removeEventListener('resize', lightboxResize); lightboxResize = null; }
   }
   function onLightboxKey(e) {
     if (e.key === 'Escape') { e.preventDefault(); closeLightbox(); }
