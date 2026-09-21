@@ -209,9 +209,9 @@ window.StultusRender = function (api) {
     buttons.appendChild(before); buttons.appendChild(after); head.appendChild(title); head.appendChild(buttons);
     var img = element('img', 'render__image'); img.alt = 'ИИ-визуализация выбранного ракурса'; img.hidden = true; zoomable(img);
     var footer = element('div', 'render__footer'), note = element('span', 'render__note', large ? 'ИИ-визуализация из плиток · проверьте стыки крупно' : 'ИИ-визуализация · сравните с исходником'), save = element('button', 'btn render__save', 'Сохранить PNG ↗');
-    var refine = element('button', 'btn render__save', 'Доработать область…'), place = element('button', 'btn render__save', 'В модель сценой');
-    save.disabled = refine.disabled = place.disabled = true;
-    footer.appendChild(note); footer.appendChild(refine); footer.appendChild(place); footer.appendChild(save);
+    var refine = element('button', 'btn render__save', 'Доработать область…');
+    save.disabled = refine.disabled = true;
+    footer.appendChild(note); footer.appendChild(refine); footer.appendChild(save);
     var info = element('div', 'render__status'); info.setAttribute('role', 'status');
     el.appendChild(head);
     // Задание, по которому сделан кадр (в том числе отредактированное).
@@ -227,13 +227,6 @@ window.StultusRender = function (api) {
       api.rb('save_render', { id: id }).then(function (r) { info.textContent = !r.ok ? r.error : r.cancelled ? '' : 'Сохранено: ' + r.path; }).catch(function (e) { info.textContent = e.message; }).finally(function () { save.disabled = false; });
     };
     var current = { source: null, result: null, camera: null, capture: null };
-    // В модель сценой: картинка перед камерой снимка на своём теге, одна операция Undo.
-    place.onclick = function () {
-      place.disabled = true; info.textContent = 'Кладу кадр в модель…';
-      api.rb('place_scene', { id: id }).then(function (r) {
-        info.textContent = r.ok ? 'Сцена «' + r.scene + '» создана: тег «' + r.tag + '» включён только в ней. Отменить — Ctrl+Z.' : 'Не удалось: ' + r.error;
-      }).catch(function (e) { info.textContent = e.message; }).finally(function () { place.disabled = false; });
-    };
     // Доработать область: маска на результате, задание, референс, сила → генерация без хода модели.
     refine.onclick = function () {
       if (!current.result) return;
@@ -253,7 +246,7 @@ window.StultusRender = function (api) {
         };
       } });
     };
-    function setCurrent(source, result, camera, capture) { current.source = source; current.result = result; current.camera = camera || null; current.capture = capture || null; refine.disabled = false; place.disabled = !camera; }
+    function setCurrent(source, result, camera, capture) { current.source = source; current.result = result; current.camera = camera || null; current.capture = capture || null; refine.disabled = false; }
     return { el: el, info: info, save: save, setImages: setImages, setCurrent: setCurrent };
   }
   // Доработка: карточка хода работы и запрос на gateway. Результат приходит render_result.

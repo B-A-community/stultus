@@ -48,11 +48,6 @@ module BACommunity
         { ok: true }
       end
 
-      # Что показывать в модели: превью (у большого кадра) или сам кадр.
-      def display_path(id)
-        target, = paths(id)
-        File.file?(preview_path(id)) ? preview_path(id) : target
-      end
 
       def decode(value)
         raise 'Изображение слишком большое' if value.to_s.bytesize > MAX_BYTES * 4 / 3 + 4
