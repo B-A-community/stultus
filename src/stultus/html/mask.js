@@ -14,7 +14,7 @@ window.StultusMask = (function () {
     var paint = document.createElement('canvas'); paint.className = 'mask__paint';
     var view = document.createElement('canvas'); view.className = 'mask__view';
     var bar = element('div', 'mask__bar');
-    var hint = element('span', 'mask__hint', 'Закрасьте, что должно измениться. Колесо — масштаб, правая кнопка — сдвиг.');
+    var hint = element('span', 'mask__hint', 'Закрасьте, что должно измениться. Колесо мыши — масштаб, средняя кнопка (или правая) — сдвинуть картинку.');
     var sizeLabel = element('label', 'mask__size', 'Кисть ');
     var size = document.createElement('input'); size.type = 'range'; size.min = 0.3; size.max = 30; size.step = 0.1; size.value = 6; size.setAttribute('aria-label', 'Размер кисти');
     var sizeOut = element('span', 'mask__out', '');
@@ -25,14 +25,33 @@ window.StultusMask = (function () {
     zoomLabel.appendChild(zoom); zoomLabel.appendChild(zoomOut);
     var brush = element('button', 'btn', 'Кисть'), eraser = element('button', 'btn', 'Ластик'), clear = element('button', 'btn', 'Очистить');
     var cancel = element('button', 'btn', 'Отмена'), done = element('button', 'btn btn--primary', 'Готово ↗');
+    // Назад/вперёд: стрелки-развороты, Ctrl+Z / Ctrl+Y.
+    var UNDO_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6 4 10.5 9 15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 10.5H15a4.5 4.5 0 0 1 0 9H9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
+    var REDO_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6 5 4.5-5 4.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 10.5H9a4.5 4.5 0 0 0 0 9h6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
+    var undoBtn = element('button', 'btn mask__step'), redoBtn = element('button', 'btn mask__step');
+    undoBtn.innerHTML = UNDO_SVG; redoBtn.innerHTML = REDO_SVG;
+    undoBtn.title = 'Назад (Ctrl+Z)'; redoBtn.title = 'Вперёд (Ctrl+Y)';
+    undoBtn.setAttribute('aria-label', 'Назад'); redoBtn.setAttribute('aria-label', 'Вперёд');
+    undoBtn.disabled = redoBtn.disabled = true;
     brush.setAttribute('aria-pressed', 'true'); eraser.setAttribute('aria-pressed', 'false');
-    [hint, sizeLabel, zoomLabel, brush, eraser, clear, cancel, done].forEach(function (n) { bar.appendChild(n); });
+    var sliders = element('div', 'mask__sliders'); sliders.appendChild(zoomLabel); sliders.appendChild(sizeLabel);
+    var tools = element('div', 'mask__tools');
+    [undoBtn, redoBtn, brush, eraser, clear, cancel, done].forEach(function (n) { tools.appendChild(n); });
+    bar.appendChild(hint); bar.appendChild(sliders); bar.appendChild(tools);
     frame.appendChild(view); stage.appendChild(frame); overlay.appendChild(stage); overlay.appendChild(bar);
     document.body.appendChild(overlay);
 
     var erasing = false, drawing = false, last = null, space = false;
     var scale = 1, tx = 0, ty = 0, fitW = 0, fitH = 0, panning = null;
     var pctx = paint.getContext('2d'), vctx = view.getContext('2d');
+    // История штрихов: снимок маски перед каждым штрихом, до 40 шагов.
+    var undo = [], redo = [];
+    function snapshot() { return pctx.getImageData(0, 0, paint.width, paint.height); }
+    function remember() { undo.push(snapshot()); if (undo.length > 40) undo.shift(); redo.length = 0; steps(); }
+    function steps() { undoBtn.disabled = !undo.length; redoBtn.disabled = !redo.length; }
+    function doUndo() { if (!undo.length) return; redo.push(snapshot()); pctx.putImageData(undo.pop(), 0, 0); redraw(); steps(); }
+    function doRedo() { if (!redo.length) return; undo.push(snapshot()); pctx.putImageData(redo.pop(), 0, 0); redraw(); steps(); }
+    undoBtn.onclick = doUndo; redoBtn.onclick = doRedo;
 
     function fit() {
       var maxW = stage.clientWidth - 24, maxH = stage.clientHeight - 24;
@@ -87,6 +106,7 @@ window.StultusMask = (function () {
         panning = { x: e.clientX - tx, y: e.clientY - ty }; stage.setPointerCapture(e.pointerId); e.preventDefault(); return;
       }
       if (e.button !== 0 || e.target !== view) return;
+      remember();
       drawing = true; last = pos(e); stroke(last, last); redraw(); stage.setPointerCapture(e.pointerId); e.preventDefault();
     };
     stage.onpointermove = function (e) {
@@ -105,10 +125,12 @@ window.StultusMask = (function () {
     size.oninput = sizeText;
     brush.onclick = function () { erasing = false; brush.setAttribute('aria-pressed', 'true'); eraser.setAttribute('aria-pressed', 'false'); };
     eraser.onclick = function () { erasing = true; brush.setAttribute('aria-pressed', 'false'); eraser.setAttribute('aria-pressed', 'true'); };
-    clear.onclick = function () { pctx.clearRect(0, 0, paint.width, paint.height); redraw(); };
+    clear.onclick = function () { remember(); pctx.clearRect(0, 0, paint.width, paint.height); redraw(); };
     function close() { overlay.remove(); document.removeEventListener('keydown', onKey); document.removeEventListener('keyup', onKeyUp); window.removeEventListener('resize', fit); }
     function onKey(e) {
       if (e.key === 'Escape') { e.preventDefault(); cancel.click(); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) doRedo(); else doUndo(); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); doRedo(); }
       else if (e.key === ' ') { space = true; e.preventDefault(); }
       else if (e.key === '[') { size.value = Math.max(0.3, Number(size.value) - 0.5); sizeText(); }
       else if (e.key === ']') { size.value = Math.min(30, Number(size.value) + 0.5); sizeText(); }
