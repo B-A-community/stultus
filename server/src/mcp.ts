@@ -5,7 +5,7 @@ import { z } from 'zod'
 import type { PluginConnection } from './connection.ts'
 import { getRecipe, listRecipes, saveRecipe } from './recipes.ts'
 import { randomUUID } from 'node:crypto'
-import { pngImage, renderConfigured, renderViewport, type RenderImage } from './render.ts'
+import { pngImage, renderConfigured, renderViewport, strengthTier, type EditOptions, type RenderImage } from './render.ts'
 import { LARGE_SIZES, SIZE_IDS, largeGenerations, largeSize, largeSizeList, renderLarge } from './tiles.ts'
 import { config } from './config.ts'
 
@@ -26,7 +26,7 @@ export const MCP_SERVER_NAME = 'stultus'
 export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'render_vray', 'scenes', 'save_recipe', 'get_recipe', 'undo', 'ask_user'] as const
 
 function build(conn: PluginConnection): McpServer {
-  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.11' })
+  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.12' })
 
   server.registerTool('render_viewport', {
     title: 'Визуализация текущего кадра',
@@ -65,10 +65,17 @@ function build(conn: PluginConnection): McpServer {
       const finalPrompt = (shot.prompt ?? '').trim().slice(0, 6000) || prompt
       const edited = finalPrompt !== prompt
       const large = largeSize(shot.size)
+      // Дополнения из карточки: маска области, референс стиля, сила задания.
+      const opts: EditOptions = {
+        mask: shot.mask ? pngImage(shot.mask) : undefined,
+        reference: shot.reference ? pngImage(shot.reference) : undefined,
+        strength: typeof shot.strength === 'number' ? shot.strength : undefined,
+      }
+      const extras = [opts.mask ? 'меняется только отмеченная область' : '', opts.reference ? 'по референсу стиля' : '', `сила задания ${strengthTier(opts.strength).value}/100 (${strengthTier(opts.strength).label})`].filter(Boolean).join(', ')
       let shown: RenderImage, sourceShown = source, note = '', width: number, height: number
       if (large) {
         const label = LARGE_SIZES[large].label
-        const result = await renderLarge(large, source, finalPrompt, signal, text => conn.send({ type: 'render_status', id, text: `Большой кадр ${label}: ${text}` }))
+        const result = await renderLarge(large, source, finalPrompt, signal, text => conn.send({ type: 'render_status', id, text: `Большой кадр ${label}: ${text}` }), undefined, opts)
         signal.throwIfAborted()
         shown = result.preview; sourceShown = result.source; width = result.width; height = result.height
         // Превью в ленту сразу, полный файл — кусками следом: окно пишет их на диск.
@@ -79,7 +86,7 @@ function build(conn: PluginConnection): McpServer {
         note = ` Это «большой кадр» ${label} из плиток (${result.generations} генераций, плитки пустого фона взяты из эталона): у швов плиток возможны двоение кромок и разница тона, предупреди пользователя и предложи проверить стыки крупно. Тебе показано уменьшенное превью, полный файл сохранён у пользователя.`
       } else {
         conn.send({ type: 'render_status', id, text: 'Создаю визуализацию. Это может занять несколько минут…' })
-        const image = await renderViewport(source, finalPrompt, signal); shown = image; width = image.width; height = image.height
+        const image = await renderViewport(source, finalPrompt, signal, opts); shown = image; width = image.width; height = image.height
         signal.throwIfAborted()
         conn.send({ type: 'render_result', id, prompt: finalPrompt, source: sourceShown, image })
       }
@@ -87,7 +94,7 @@ function build(conn: PluginConnection): McpServer {
       const exported = await conn.callTool('render_export', { render_id: id, save_path: save_path || '' })
       const changedRatio = Math.abs(width / height / (source.width / source.height) - 1) > 0.02
       return { content: [
-        { type: 'text' as const, text: `Постпродакшн-кадр ${width}×${height} показан пользователю. Исходник ${source.width}×${source.height}. Геометрия SketchUp не менялась. Это ИИ-визуализация: сравни её с исходником, не обещай точность геометрии.` + note + ` ${exported.content}` + (changedRatio ? ' Формат результата отличается от исходного — сообщи пользователю.' : '') + (edited ? ` Пользователь изменил задание, генерация шла по его тексту: «${finalPrompt}».` : '') },
+        { type: 'text' as const, text: `Постпродакшн-кадр ${width}×${height} показан пользователю. Исходник ${source.width}×${source.height}. Геометрия SketchUp не менялась. Это ИИ-визуализация: сравни её с исходником, не обещай точность геометрии. Параметры из карточки: ${extras}.` + note + ` ${exported.content}` + (changedRatio ? ' Формат результата отличается от исходного — сообщи пользователю.' : '') + (edited ? ` Пользователь изменил задание, генерация шла по его тексту: «${finalPrompt}».` : '') },
         { type: 'image' as const, data: shown.base64, mimeType: shown.mime },
       ] }
     } catch (error) {

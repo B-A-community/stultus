@@ -95,7 +95,7 @@ test('large frame: reference first, then every tile with two images, result at f
   const result = await renderLarge('4k', source, 'тёплый вечер', AbortSignal.timeout(20000), t => progress.push(t), generate)
   assert.equal(calls.length, 7)
   assert.equal(calls[0]!.sources.length, 1)
-  assert.match(calls[0]!.prompt, /EDIT the attached SketchUp viewport/)
+  assert.match(calls[0]!.prompt, /EDIT the FIRST attached SketchUp viewport/)
   for (const call of calls.slice(1)) {
     assert.equal(call.sources.length, 2)
     assert.match(call.sources[0]!, /tile-\d+-source\.png$/)

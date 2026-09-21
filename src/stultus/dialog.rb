@@ -143,7 +143,11 @@ module BACommunity
         end
 
         register(dialog, 'cache_render') do |_id, p|
-          RenderAssets.store(p['id'], p['image'], p['source'], preview: p['preview'] ? true : false)
+          RenderAssets.store(p['id'], p['image'], p['source'], preview: p['preview'] ? true : false, meta: p['meta'])
+        end
+        # Визуализация в модель сценой: картинка перед камерой снимка на своём теге.
+        register(dialog, 'place_scene') do |_id, p|
+          Overlay.place_scene(p['id'], name: p['name'])
         end
         # Полный большой кадр приходит кусками по порядку: дописываем в файл.
         register(dialog, 'render_chunk') do |_id, p|

@@ -27,6 +27,10 @@ export interface ToolResult {
   size?: string
   /** Плагин не ответил вовремя (человек не нажал кнопку в карточке). */
   timedOut?: boolean
+  /** Маска области (PNG base64), референс стиля (PNG base64), сила задания 0–100 — из карточки. */
+  mask?: string
+  reference?: string
+  strength?: number
 }
 
 export interface CallOptions {
@@ -50,7 +54,10 @@ export type PluginMessage =
       /** Картинки пользователя — оригиналы, base64. */
       attachments?: Array<{ name: string; mime: string; base64: string }>
     }
-  | { type: 'tool_result'; call_id: string; ok: boolean; content?: string; image?: { mime: string; base64: string }; capture?: ToolResult['capture']; prompt?: string; size?: string }
+  | { type: 'tool_result'; call_id: string; ok: boolean; content?: string; image?: { mime: string; base64: string }; capture?: ToolResult['capture']; prompt?: string; size?: string; mask?: string; reference?: string; strength?: number }
+  /** Доработка готового кадра из окна, без хода модели: база — картинка, маска, референс, сила. */
+  | { type: 'render_edit'; id: string; prompt: string; base: string; mask?: string; reference?: string; strength?: number }
+  | { type: 'render_cancel'; id: string }
   | { type: 'cancel' }
   | { type: 'recipe_delete'; id: string }
 
@@ -69,7 +76,7 @@ export type GatewayMessage =
   | { type: 'error'; message: string }
   | { type: 'render_status'; id: string; text: string; failed?: boolean }
   | { type: 'recipes'; recipes: import('./recipes.ts').Recipe[] }
-  | { type: 'render_result'; id: string; prompt: string; source: import('./render.ts').RenderImage; image: import('./render.ts').RenderImage; large?: boolean; full?: { width: number; height: number; bytes: number; chunks: number } }
+  | { type: 'render_result'; id: string; prompt: string; source: import('./render.ts').RenderImage; image: import('./render.ts').RenderImage; large?: boolean; edit?: boolean; full?: { width: number; height: number; bytes: number; chunks: number } }
   /** Полный большой кадр идёт в окно кусками base64 по порядку; окно дописывает их в файл на диске. */
   | { type: 'render_chunk'; id: string; index: number; total: number; data: string }
 

@@ -7,8 +7,9 @@ import { PluginConnection, type PluginMessage } from './connection.ts'
 import { handleMcp } from './mcp.ts'
 import { deleteRecipe, listRecipes } from './recipes.ts'
 import { renderConfigured } from './render.ts'
+import { cancelAllEdits, cancelEdit, runEdit } from './edit.ts'
 
-const VERSION = '0.2.11'
+const VERSION = '0.2.12'
 
 /** Живые окна SketchUp по id соединения. */
 const connections = new Map<string, PluginConnection>()
@@ -113,10 +114,16 @@ wss.on('connection', (ws) => {
         void runChat(conn, msg)
         break
       case 'tool_result':
-        conn.resolveTool(msg.call_id, { ok: msg.ok, content: msg.content ?? '', image: msg.image, capture: msg.capture, prompt: msg.prompt, size: msg.size })
+        conn.resolveTool(msg.call_id, { ok: msg.ok, content: msg.content ?? '', image: msg.image, capture: msg.capture, prompt: msg.prompt, size: msg.size, mask: msg.mask, reference: msg.reference, strength: msg.strength })
         break
       case 'cancel':
         conn.running?.cancel()
+        break
+      case 'render_edit':
+        void runEdit(conn, msg)
+        break
+      case 'render_cancel':
+        cancelEdit(conn, msg.id)
         break
       case 'recipe_delete':
         deleteRecipe(msg.id)
@@ -127,6 +134,7 @@ wss.on('connection', (ws) => {
   })
 
   ws.on('close', () => {
+    cancelAllEdits(conn)
     conn.dispose()
     connections.delete(conn.id)
     console.log(`[ws] отключение ${conn.id.slice(0, 8)} (всего ${connections.size})`)

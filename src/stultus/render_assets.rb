@@ -28,6 +28,32 @@ module BACommunity
         File.join(root, "#{id}-preview.png")
       end
 
+      # Данные кадра: камера снимка, размер, задание — для сцены-наложения.
+      def meta_path(id)
+        paths(id)
+        File.join(root, "#{id}.json")
+      end
+
+      def meta(id)
+        path = meta_path(id)
+        File.file?(path) ? JSON.parse(File.read(path, encoding: 'utf-8')) : nil
+      rescue StandardError
+        nil
+      end
+
+      def save_meta(id, hash)
+        return { ok: false, error: 'Нет данных' } unless hash.is_a?(Hash)
+        FileUtils.mkdir_p(root)
+        File.write(meta_path(id), JSON.generate(hash), encoding: 'utf-8')
+        { ok: true }
+      end
+
+      # Что показывать в модели: превью (у большого кадра) или сам кадр.
+      def display_path(id)
+        target, = paths(id)
+        File.file?(preview_path(id)) ? preview_path(id) : target
+      end
+
       def decode(value)
         raise 'Изображение слишком большое' if value.to_s.bytesize > MAX_BYTES * 4 / 3 + 4
         data = Base64.strict_decode64(value.to_s)
@@ -37,12 +63,13 @@ module BACommunity
 
       # preview: true — картинка это превью большого кадра, полный файл придёт
       # кусками (append_chunk); иначе картинка и есть кадр.
-      def store(id, image, source, preview: false)
+      def store(id, image, source, preview: false, meta: nil)
         target, original = paths(id)
         rendered_data, source_data = decode(image), decode(source)
         FileUtils.mkdir_p(root)
         File.binwrite(preview ? preview_path(id) : target, rendered_data)
         File.binwrite(original, source_data)
+        save_meta(id, meta) if meta.is_a?(Hash)
         { ok: true, id: id }
       end
 
@@ -74,7 +101,7 @@ module BACommunity
         shown = File.file?(preview_path(id)) ? preview_path(id) : target
         return { ok: false, error: 'Кадр не найден на этом компьютере.' } unless File.file?(shown) && File.file?(original)
         raise 'Изображение слишком большое' if [shown, original].any? { |file| File.size(file) > MAX_BYTES }
-        { ok: true, image: Base64.strict_encode64(File.binread(shown)), source: Base64.strict_encode64(File.binread(original)) }
+        { ok: true, image: Base64.strict_encode64(File.binread(shown)), source: Base64.strict_encode64(File.binread(original)), meta: meta(id) }
       end
 
       # Сохранить кадр по пути из чата (без диалога). Файл — только с

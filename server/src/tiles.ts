@@ -16,7 +16,7 @@ import sharp from 'sharp'
 import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { config } from './config.ts'
-import { pngImage, postproductionPrompt, runNative, tilePrompt, type RenderImage } from './render.ts'
+import { applyMask, auxImage, pngImage, postproductionPrompt, runNative, tilePrompt, type EditOptions, type RenderImage } from './render.ts'
 
 export interface Grid { cols: number; rows: number }
 export interface Tile { col: number; row: number; left: number; top: number; width: number; height: number }
@@ -149,7 +149,7 @@ export function largeSizeList(): Array<{ id: LargeSize; label: string; width: nu
 }
 
 export async function renderLarge(size: LargeSize, source: RenderImage, prompt: string, signal: AbortSignal,
-  progress: (text: string) => void, generate: Generate = runNative): Promise<LargeResult> {
+  progress: (text: string) => void, generate: Generate = runNative, opts: EditOptions = {}): Promise<LargeResult> {
   const grid = parseGrid(LARGE_SIZES[size].grid)
   const total = AbortSignal.any([signal, AbortSignal.timeout(largeGenerations(size) * config.renderLargePerGenerationMs)])
   const perCall = () => AbortSignal.any([total, AbortSignal.timeout(config.renderTimeoutMs)])
@@ -165,7 +165,15 @@ export async function renderLarge(size: LargeSize, source: RenderImage, prompt: 
     progress(`Эталон целого кадра (1 из ${n + 1})…`)
     const basePath = join(directory, 'base.png')
     await writeFile(basePath, await sharp(full).resize({ width: Math.min(GENERATOR_WIDTH, width) }).png().toBuffer(), { mode: 0o600 })
-    const base = await withRetry(() => generate(basePath, directory, postproductionPrompt(prompt), perCall()), total)
+    // Референс стиля идёт и в эталон, и в каждую плитку; маска — только на сборку.
+    const styleOpts: EditOptions = { reference: opts.reference, strength: opts.strength }
+    const refPaths: string[] = []
+    if (opts.reference) {
+      const referencePath = join(directory, 'style-reference.png')
+      await writeFile(referencePath, await auxImage(opts.reference), { mode: 0o600 })
+      refPaths.push(referencePath)
+    }
+    const base = await withRetry(() => generate([basePath, ...refPaths], directory, postproductionPrompt(prompt, styleOpts), perCall()), total)
     const baseFull = await sharp(Buffer.from(base.base64, 'base64')).resize(width, height, { fit: 'fill' }).png().toBuffer()
 
     const pieces: Array<{ tile: Tile; png: Buffer }> = []
@@ -184,13 +192,14 @@ export async function renderLarge(size: LargeSize, source: RenderImage, prompt: 
       const src = join(directory, `tile-${i}-source.png`), ref = join(directory, `tile-${i}-reference.png`)
       await writeFile(src, sourceTile, { mode: 0o600 })
       await writeFile(ref, referenceTile, { mode: 0o600 })
-      const piece = await withRetry(() => generate([src, ref], directory, tilePrompt(prompt, tilePosition(tile, grid)), perCall()), total)
+      const piece = await withRetry(() => generate([src, ref, ...refPaths], directory, tilePrompt(prompt, tilePosition(tile, grid), styleOpts), perCall()), total)
       generations++
       pieces.push({ tile, png: Buffer.from(piece.base64, 'base64') })
     }
 
     progress('Сшиваю плитки…')
-    const stitched = await stitch(width, height, layout, pieces)
+    let stitched = await stitch(width, height, layout, pieces)
+    if (opts.mask) stitched = await applyMask(full, stitched, Buffer.from(opts.mask.base64, 'base64'))
     const preview = await sharp(stitched).resize({ width: Math.min(PREVIEW_WIDTH, width) }).png().toBuffer()
     const sourcePreview = await sharp(full).resize({ width: Math.min(PREVIEW_WIDTH, width) }).png().toBuffer()
     if (config.renderKeepLast) {

@@ -20,3 +20,16 @@
 .card__option{flex-wrap:wrap;align-items:center}
 .card__select{font:inherit;color:var(--text);background:var(--input-bg);border:1px solid var(--line);border-radius:6px;padding:3px 6px;max-width:100%}
 .card__option-hint{flex-basis:100%;color:var(--text-2)}
+
+/* Область, референс, влияние задания в карточке запроса и в доработке. */
+.card__region,.card__reference{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.card__reference-thumb{height:44px;border-radius:6px;border:1px solid var(--line)}
+.card__strength{gap:10px}.card__strength input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}.card__strength-value{font-size:11px;color:var(--muted);flex-basis:100%}
+.render__refine{padding:12px 14px;border-top:1px solid var(--line)}.render__refine .card__options{margin-top:10px}
+/* Рисовалка маски: поверх всего окна, кадр по центру, панель внизу. */
+.mask{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;background:rgba(10,11,10,.94);color:var(--text)}
+.mask__stage{flex:1;display:flex;align-items:center;justify-content:center;padding:16px;min-height:0}
+.mask__view{display:block;max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.6);cursor:crosshair;touch-action:none}
+.mask__bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 16px;border-top:1px solid var(--line);background:var(--surface)}
+.mask__hint{flex:1;min-width:200px;font-size:12px;color:var(--text-2)}.mask__size{display:flex;align-items:center;gap:6px;font-size:12px}.mask__size input{accent-color:var(--accent);width:110px}
+.mask__bar .btn[aria-pressed=true]{border-color:var(--accent);color:var(--accent-text)}

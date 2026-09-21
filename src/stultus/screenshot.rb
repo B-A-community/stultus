@@ -62,7 +62,10 @@ module BACommunity
           width: width, height: height, bytes: data.bytesize, framing: 'viewport',
           camera: { eye: cam.eye.to_a, target: cam.target.to_a, up: cam.up.to_a,
                     perspective: cam.perspective?, two_point: cam.is_2d?,
-                    aspect_ratio: cam.aspect_ratio } }
+                    aspect_ratio: cam.aspect_ratio,
+                    # Для сцены-наложения: угол обзора и его ось, высота ортокамеры, размер вьюпорта.
+                    fov: (cam.perspective? ? cam.fov : nil), fov_is_height: (cam.respond_to?(:fov_is_height?) ? cam.fov_is_height? : true),
+                    height: (cam.perspective? ? nil : cam.height), vpwidth: view.vpwidth, vpheight: view.vpheight } }
       rescue StandardError => e
         { ok: false, error: "#{e.class}: #{e.message}" }
       ensure
