@@ -27,7 +27,7 @@ export const MCP_SERVER_NAME = 'stultus'
 export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'render_vray', 'scenes', 'save_recipe', 'get_recipe', 'undo', 'ask_user'] as const
 
 function build(conn: PluginConnection): McpServer {
-  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.18' })
+  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.19' })
 
   server.registerTool('render_viewport', {
     title: 'Визуализация текущего кадра',
@@ -76,14 +76,14 @@ function build(conn: PluginConnection): McpServer {
       let shown: RenderImage, sourceShown = source, note = '', width: number, height: number
       if (large) {
         const label = LARGE_SIZES[large].label
-        const result = await renderLarge(large, source, finalPrompt, signal, text => conn.send({ type: 'render_status', id, text: `Большой кадр ${label}: ${text}` }), undefined, opts)
+        const result = await renderLarge(large, source, finalPrompt, signal, (text, progress) => conn.send({ type: 'render_status', id, text: `Большой кадр ${label}: ${text}`, progress }), undefined, opts)
         signal.throwIfAborted()
         sourceShown = result.source; width = result.width; height = result.height
         // Превью в ленту сразу, полный файл — кусками следом: окно пишет их на диск.
         shown = (await sendFrame(conn, id, { file: result.file, width, height, source: sourceShown, prompt: finalPrompt })).shown
         note = ` Это «большой кадр» ${label} из плиток (${result.generations} генераций, плитки пустого фона взяты из эталона): у швов плиток возможны двоение кромок и разница тона, предупреди пользователя и предложи проверить стыки крупно. Тебе показано уменьшенное превью, полный файл сохранён у пользователя.`
       } else {
-        conn.send({ type: 'render_status', id, text: 'Создаю визуализацию. Это может занять несколько минут…' })
+        conn.send({ type: 'render_status', id, text: 'Создаю визуализацию. Это может занять несколько минут…', progress: { stage: 'single', done: 0, total: 1, frame: { width: source.width, height: source.height } } })
         const image = await renderViewport(source, finalPrompt, signal, opts); shown = image; width = image.width; height = image.height
         signal.throwIfAborted()
         conn.send({ type: 'render_result', id, prompt: finalPrompt, source: sourceShown, image })

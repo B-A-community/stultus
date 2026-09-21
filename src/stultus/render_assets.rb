@@ -74,7 +74,7 @@ module BACommunity
         return { ok: false, error: 'Кадр не найден на этом компьютере.' } unless File.file?(target)
         head = File.binread(target, 24)
         w, h = head.byteslice(16, 8).unpack('NN')
-        { ok: true, bytes: File.size(target), width: w, height: h, preview: File.file?(preview_path(id)) }
+        { ok: true, bytes: File.size(target), width: w, height: h, preview: File.file?(preview_path(id)), path: target }
       end
 
       # Кусок полного файла для отправки на сервер: base64, индекс и число кусков.

@@ -72,3 +72,16 @@
 .render__refine .card__option{margin:6px 0}
 /* Кнопка «Остановить» в карточке доработки — с отступом от текста. */
 .card__stop{display:inline-block;margin-top:16px}
+/* Оверлей хода генерации над лентой чата. */
+.gen{position:fixed;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(8,9,8,.78);backdrop-filter:blur(2px);cursor:pointer}
+.gen__panel{display:flex;flex-direction:column;align-items:center;gap:12px;padding:18px 22px;border-radius:14px;background:var(--surface);border:1px solid var(--line);box-shadow:0 18px 50px rgba(0,0,0,.5);cursor:default;max-width:calc(100% - 32px)}
+.gen__title{font-size:12px;color:var(--text);text-align:center;max-width:480px}
+.gen__grid{display:grid;gap:4px}
+.gen__cell{position:relative;background:var(--bg);border:1px solid var(--line-2);border-radius:4px;overflow:hidden}
+.gen__cell img{display:block;width:100%;height:100%;object-fit:cover;animation:gen-in .5s ease}
+.gen__cell.is-active:before{content:'';position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,var(--accent-soft) 50%,transparent 70%);background-size:200% 100%;animation:gen-shimmer 1.4s linear infinite}
+.gen__cell.is-done{border-color:var(--accent-dim)}
+.gen__foot{font:11px var(--mono);color:var(--muted);letter-spacing:.3px;text-align:center}
+.gen__hint{font:10px var(--mono);letter-spacing:1px;color:var(--muted)}
+@keyframes gen-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+@keyframes gen-in{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:none}}

@@ -40,6 +40,19 @@ export interface CallOptions {
   timeoutText?: string
 }
 
+/**
+ * Ход генерации для оверлея в окне: стадия, сделано/всего, сетка плиток и
+ * миниатюра только что готовой плитки (JPEG base64, ~256 px).
+ */
+export interface RenderProgress {
+  stage: 'single' | 'base' | 'tile' | 'stitch' | 'compose'
+  done: number
+  total: number
+  grid?: { cols: number; rows: number }
+  frame?: { width: number; height: number }
+  tile?: { index: number; thumb: string }
+}
+
 /** Сообщения плагин → gateway. */
 export type PluginMessage =
   | { type: 'hello'; token?: string; instance?: InstanceInfo; sessions?: Record<string, string> }
@@ -76,7 +89,7 @@ export type GatewayMessage =
   | { type: 'session'; provider: string; id: string }
   | { type: 'done'; usage?: Usage }
   | { type: 'error'; message: string }
-  | { type: 'render_status'; id: string; text: string; failed?: boolean }
+  | { type: 'render_status'; id: string; text: string; failed?: boolean; progress?: RenderProgress }
   | { type: 'recipes'; recipes: import('./recipes.ts').Recipe[] }
   | { type: 'render_result'; id: string; prompt: string; source: import('./render.ts').RenderImage; image: import('./render.ts').RenderImage; large?: boolean; edit?: boolean; full?: { width: number; height: number; bytes: number; chunks: number } }
   /** Полный большой кадр идёт в окно кусками base64 по порядку; окно дописывает их в файл на диске. */

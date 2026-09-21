@@ -12,7 +12,7 @@ import sharp from 'sharp'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { config } from './config.ts'
-import type { PluginConnection, PluginMessage } from './connection.ts'
+import type { PluginConnection, PluginMessage, RenderProgress } from './connection.ts'
 import { sendFrame, PREVIEW_WIDTH } from './frames.ts'
 import { pngImage, renderConfigured, renderViewport, runNative, type EditOptions } from './render.ts'
 import { editRegion, gridFor, pngSize, SINGLE_BUDGET } from './region.ts'
@@ -79,7 +79,7 @@ export async function runEdit(conn: PluginConnection, msg: EditMessage): Promise
   if (!/^[0-9a-f-]{36}$/.test(id)) return
   const controller = new AbortController()
   editsOf(conn).set(id, controller)
-  const progress = (text: string) => conn.send({ type: 'render_status', id, text })
+  const progress = (text: string, info?: RenderProgress) => conn.send({ type: 'render_status', id, text, progress: info })
   try {
     if (!renderConfigured()) throw new Error('Генерация не подключена: нужен вход Codex на gateway и RENDER_ENABLED=1.')
     const base: Buffer = msg.base_upload ? takeUpload(conn, id) : Buffer.from(String(msg.base ?? ''), 'base64')
@@ -95,7 +95,7 @@ export async function runEdit(conn: PluginConnection, msg: EditMessage): Promise
     let file: Buffer, generations = 1
     if (opts.mask && large) {
       // Большой кадр: область из полного файла, генерация в родном разрешении.
-      const result = await editRegion(base, Buffer.from(opts.mask.base64, 'base64'), prompt, opts, controller.signal, t => progress(`Доработка: ${t}`))
+      const result = await editRegion(base, Buffer.from(opts.mask.base64, 'base64'), prompt, opts, controller.signal, (t, info) => progress(`Доработка: ${t}`, info))
       file = result.file; generations = result.generations
     } else if (large) {
       // Без маски на большом кадре: весь кадр плитками, размер тот же.
@@ -103,11 +103,11 @@ export async function runEdit(conn: PluginConnection, msg: EditMessage): Promise
       await mkdir(root, { recursive: true, mode: 0o700 })
       const directory = await mkdtemp(join(root, 'edit-'))
       try {
-        const result = await tiledGenerate(base, width, height, { grid: gridFor(width, height), prompt, generate: runNative, progress: t => progress(`Доработка: ${t}`), signal: controller.signal, directory, baseOpts: opts })
+        const result = await tiledGenerate(base, width, height, { grid: gridFor(width, height), prompt, generate: runNative, progress: (t, info) => progress(`Доработка: ${t}`, info), signal: controller.signal, directory, baseOpts: opts })
         file = result.stitched; generations = result.generations
       } finally { await rm(directory, { recursive: true, force: true }) }
     } else {
-      progress(opts.mask ? 'Дорабатываю отмеченную область…' : 'Создаю новую версию кадра…')
+      progress(opts.mask ? 'Дорабатываю отмеченную область…' : 'Создаю новую версию кадра…', { stage: 'single', done: 0, total: 1, frame: { width, height } })
       const image = await renderViewport(pngImage(base.toString('base64')), prompt, controller.signal, opts)
       file = Buffer.from(image.base64, 'base64')
     }

@@ -12,7 +12,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { config } from './config.ts'
 import { applyMask, pngImage, renderViewport, runNative, type EditOptions, type RenderImage } from './render.ts'
-import { tiledGenerate, type Generate, type Grid } from './tiles.ts'
+import { tiledGenerate, type Generate, type Grid, type Progress } from './tiles.ts'
 
 /** Столько пикселей одна генерация отдаёт без потери деталей. */
 export const SINGLE_BUDGET = 2.4e6
@@ -57,7 +57,7 @@ export async function maskBounds(mask: Buffer, width: number, height: number, ma
 export interface RegionResult { file: Buffer; width: number; height: number; generations: number; region: Region }
 
 export async function editRegion(base: Buffer, mask: Buffer, prompt: string, opts: EditOptions, signal: AbortSignal,
-  progress: (text: string) => void, generate: Generate = runNative): Promise<RegionResult> {
+  progress: Progress, generate: Generate = runNative): Promise<RegionResult> {
   const meta = await sharp(base).metadata()
   const width = meta.width!, height = meta.height!
   const region = await maskBounds(mask, width, height)
@@ -69,7 +69,7 @@ export async function editRegion(base: Buffer, mask: Buffer, prompt: string, opt
   const area = region.width * region.height
   let edited: Buffer, generations: number
   if (area <= SINGLE_BUDGET) {
-    progress(`Область ${region.width}×${region.height}: одна генерация в родном разрешении…`)
+    progress(`Область ${region.width}×${region.height}: одна генерация в родном разрешении…`, { stage: 'single', done: 0, total: 1, frame: { width: region.width, height: region.height } })
     const image = await renderViewport(pngImage(crop.toString('base64')), prompt, signal, { ...opts, mask: maskImage }, generate)
     edited = Buffer.from(image.base64, 'base64'); generations = 1
   } else {
@@ -90,7 +90,7 @@ export async function editRegion(base: Buffer, mask: Buffer, prompt: string, opt
       await rm(directory, { recursive: true, force: true })
     }
   }
-  progress('Вклеиваю область в кадр…')
+  progress('Вклеиваю область в кадр…', { stage: 'compose', done: 1, total: 1 })
   const file = await sharp(base).composite([{ input: edited, left: region.left, top: region.top }]).png({ compressionLevel: 6 }).toBuffer()
   return { file, width, height, generations, region }
 }

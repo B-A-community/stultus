@@ -16,6 +16,7 @@ import sharp from 'sharp'
 import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { config } from './config.ts'
+import type { RenderProgress } from './connection.ts'
 import { MAX_REFERENCES, applyMask, auxImage, maskOverlay, pngImage, postproductionPrompt, runNative, tilePrompt, type EditOptions, type RenderImage } from './render.ts'
 
 export interface Grid { cols: number; rows: number }
@@ -148,11 +149,18 @@ export function largeSizeList(): Array<{ id: LargeSize; label: string; width: nu
   return (Object.keys(LARGE_SIZES) as LargeSize[]).map(id => ({ id, label: LARGE_SIZES[id].label, width: LARGE_SIZES[id].width, generations: largeGenerations(id) }))
 }
 
+export type Progress = (text: string, info?: RenderProgress) => void
+
+/** Миниатюра плитки для оверлея прогресса. */
+async function thumbOf(png: Buffer): Promise<string> {
+  return (await sharp(png).resize({ width: 256 }).jpeg({ quality: 70 }).toBuffer()).toString('base64')
+}
+
 export interface TiledOptions {
   grid: Grid
   prompt: string
   generate: Generate
-  progress: (text: string) => void
+  progress: Progress
   signal: AbortSignal
   directory: string
   /** Для эталона целого кадра: маска (подсветка области), референсы, сила. */
@@ -174,7 +182,8 @@ export async function tiledGenerate(full: Buffer, width: number, height: number,
   const layout = layoutTiles(width, height, grid, config.renderLargeOverlap)
   const n = layout.tiles.length
 
-  progress(`Эталон целого кадра (1 из ${n + 1})…`)
+  const frame = { width, height }
+  progress(`Эталон целого кадра (1 из ${n + 1})…`, { stage: 'base', done: 0, total: n + 1, grid, frame })
   const baseSmall = await sharp(full).resize({ width: Math.min(GENERATOR_WIDTH, width) }).png().toBuffer()
   const basePath = join(directory, 'base.png')
   await writeFile(basePath, baseSmall, { mode: 0o600 })
@@ -193,6 +202,7 @@ export async function tiledGenerate(full: Buffer, width: number, height: number,
   }
   const base = await withRetry(() => generate([...baseSources, ...refPaths], directory, postproductionPrompt(prompt, baseOpts), perCall()), total)
   const baseFull = await sharp(Buffer.from(base.base64, 'base64')).resize(width, height, { fit: 'fill' }).png().toBuffer()
+  progress('Эталон готов', { stage: 'tile', done: 1, total: n + 1, grid, frame })
 
   const pieces: Array<{ tile: Tile; png: Buffer }> = []
   let generations = 1
@@ -202,26 +212,28 @@ export async function tiledGenerate(full: Buffer, width: number, height: number,
     const sourceTile = await sharp(full).extract(region).png().toBuffer()
     const referenceTile = await sharp(baseFull).extract(region).png().toBuffer()
     if (await isFlat(sourceTile)) {
-      progress(`Плитка ${i + 1} из ${n}: пустой фон, беру из эталона`)
       pieces.push({ tile, png: referenceTile })
+      progress(`Плитка ${i + 1} из ${n}: пустой фон, беру из эталона`, { stage: 'tile', done: 1 + pieces.length, total: n + 1, grid, frame, tile: { index: i, thumb: await thumbOf(referenceTile) } })
       continue
     }
-    progress(`Плитка ${i + 1} из ${n} (${i + 2} из ${n + 1})…`)
+    progress(`Плитка ${i + 1} из ${n} (${i + 2} из ${n + 1})…`, { stage: 'tile', done: 1 + pieces.length, total: n + 1, grid, frame })
     const src = join(directory, `tile-${i}-source.png`), ref = join(directory, `tile-${i}-reference.png`)
     await writeFile(src, sourceTile, { mode: 0o600 })
     await writeFile(ref, referenceTile, { mode: 0o600 })
     const piece = await withRetry(() => generate([src, ref, ...refPaths], directory, tilePrompt(prompt, tilePosition(tile, grid), tileOpts), perCall()), total)
     generations++
-    pieces.push({ tile, png: Buffer.from(piece.base64, 'base64') })
+    const pieceBuffer = Buffer.from(piece.base64, 'base64')
+    pieces.push({ tile, png: pieceBuffer })
+    progress(`Плитка ${i + 1} из ${n} готова`, { stage: 'tile', done: 1 + pieces.length, total: n + 1, grid, frame, tile: { index: i, thumb: await thumbOf(pieceBuffer) } })
   }
 
-  progress('Сшиваю плитки…')
+  progress('Сшиваю плитки…', { stage: 'stitch', done: n + 1, total: n + 1, grid, frame })
   const stitched = await stitch(width, height, layout, pieces)
   return { stitched, generations }
 }
 
 export async function renderLarge(size: LargeSize, source: RenderImage, prompt: string, signal: AbortSignal,
-  progress: (text: string) => void, generate: Generate = runNative, opts: EditOptions = {}): Promise<LargeResult> {
+  progress: Progress, generate: Generate = runNative, opts: EditOptions = {}): Promise<LargeResult> {
   const grid = parseGrid(LARGE_SIZES[size].grid)
   const root = resolve(config.workDir, 'renders')
   await mkdir(root, { recursive: true, mode: 0o700 })

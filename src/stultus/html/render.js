@@ -120,6 +120,8 @@ window.StultusRender = function (api) {
     return { el: wrap, value: function () { return items.length ? items.map(function (it) { return stripPrefix(it.data); }) : null; }, disable: function () { pick.disabled = true; } };
   }
   function status(msg) {
+    if (msg.failed) window.StultusProgress.done(msg.id);
+    else if (msg.progress) window.StultusProgress.update(msg.id, msg.progress, msg.text);
     var job = jobs[msg.id]; if (!job) return;
     job.card.querySelector('.card__text').textContent = msg.text;
     if (msg.failed) {
@@ -254,7 +256,10 @@ window.StultusRender = function (api) {
     var before = element('button', 'btn', 'Исходник'), after = element('button', 'btn', 'Результат');
     before.setAttribute('aria-pressed', 'false'); after.setAttribute('aria-pressed', 'true');
     buttons.appendChild(before); buttons.appendChild(after); head.appendChild(title); head.appendChild(buttons);
-    var img = element('img', 'render__image'); img.alt = 'ИИ-визуализация выбранного ракурса'; img.hidden = true; zoomable(img);
+    var img = element('img', 'render__image'); img.alt = 'ИИ-визуализация выбранного ракурса'; img.hidden = true;
+    img.classList.add('is-zoomable'); img.title = 'Открыть крупно';
+    // Большой кадр: в просмотр идёт полный файл с диска, а не превью 1920.
+    img.onclick = function () { if (img.hidden || !img.src) return; var fullUrl = current.fullUrl && after.getAttribute('aria-pressed') === 'true' ? current.fullUrl : img.src; openLightbox(fullUrl, img.alt); };
     var footer = element('div', 'render__footer'), note = element('span', 'render__note', large ? 'ИИ-визуализация из плиток' : 'ИИ-визуализация'), save = element('button', 'btn render__save', 'Сохранить PNG ↗');
     var refine = element('button', 'btn render__save', 'Доработать область…');
     save.disabled = refine.disabled = true;
@@ -273,7 +278,8 @@ window.StultusRender = function (api) {
       save.disabled = true;
       api.rb('save_render', { id: id }).then(function (r) { info.textContent = !r.ok ? r.error : r.cancelled ? '' : 'Сохранено: ' + r.path; }).catch(function (e) { info.textContent = e.message; }).finally(function () { save.disabled = false; });
     };
-    var current = { source: null, result: null, camera: null, capture: null, id: id };
+    var current = { source: null, result: null, camera: null, capture: null, id: id, fullUrl: null };
+    function setFull(path) { current.fullUrl = path ? encodeURI('file:///' + String(path).replace(/\\/g, '/')) : null; img.title = current.fullUrl ? 'Открыть крупно (полный файл)' : 'Открыть крупно'; }
     // Доработать область: маска на результате, задание, референс, сила → генерация без хода модели.
     refine.onclick = function () {
       if (!current.result) return;
@@ -301,7 +307,7 @@ window.StultusRender = function (api) {
       } });
     };
     function setCurrent(source, result, camera, capture) { current.source = source; current.result = result; current.camera = camera || null; current.capture = capture || null; refine.disabled = false; }
-    return { el: el, info: info, save: save, setImages: setImages, setCurrent: setCurrent };
+    return { el: el, info: info, save: save, setImages: setImages, setCurrent: setCurrent, setFull: setFull };
   }
   // Доработка: карточка хода работы и запрос на gateway. Результат приходит render_result.
   function startEdit(p) {
@@ -331,6 +337,7 @@ window.StultusRender = function (api) {
         return;
       }
       text.textContent = head + '\n\nПередаю полный кадр ' + p.full.width + ' × ' + p.full.height + ' на сервер: ' + (index + 1) + '/' + total;
+      window.StultusProgress.update(id, { stage: 'single', done: 0, total: 1, frame: { width: p.full.width, height: p.full.height } }, 'Передаю полный кадр на сервер: ' + (index + 1) + '/' + total);
       api.rb('read_render_chunk', { id: p.full.id, index: index, size: CHUNK }).then(function (r) {
         if (!r || !r.ok) throw new Error(r && r.error || 'кусок не прочитан');
         api.send({ type: 'render_upload', id: id, index: r.index, total: r.total, data: r.data });
@@ -345,6 +352,7 @@ window.StultusRender = function (api) {
   // saved[id] — обещание «кадр целиком лежит на диске»; его ждёт render_export.
   var saved = {};
   function result(msg) {
+    window.StultusProgress.done(msg.id);
     var job = jobs[msg.id]; if (!job) return;
     job.record.ok = true; job.card.remove(); delete jobs[msg.id];
     var output = frame(msg.id, msg.prompt, msg.large, msg.edit); output.setImages(msg.source.base64, msg.image.base64);
@@ -372,7 +380,7 @@ window.StultusRender = function (api) {
         f.received++;
         if (r.done) {
           f.output.info.textContent = 'Полный кадр ' + f.full.width + ' × ' + f.full.height + ' (' + Math.round(f.full.bytes / 1048576) + ' МБ) сохранён на этом компьютере.';
-          f.output.save.disabled = false; delete files[msg.id]; f.settle.res();
+          f.output.save.disabled = false; f.output.setFull(r.path); delete files[msg.id]; f.settle.res();
         } else f.output.info.textContent = 'Получаю полный кадр ' + f.full.width + ' × ' + f.full.height + '… ' + f.received + '/' + msg.total;
       });
     }).catch(function (e) { f.output.info.textContent = 'Полный кадр не сохранён: ' + e.message; delete files[msg.id]; f.settle.rej(e); });
@@ -401,6 +409,7 @@ window.StultusRender = function (api) {
       if (!r.ok) { output.info.textContent = r.error; return; }
       output.setImages(r.source, r.image); output.save.disabled = false; output.info.textContent = '';
       output.setCurrent(r.source, r.image, r.meta && r.meta.camera, r.meta && r.meta.width ? { width: r.meta.width, height: r.meta.height } : null);
+      api.rb('render_file_info', { id: data.id }).then(function (fi) { if (fi && fi.ok && fi.preview) output.setFull(fi.path); }).catch(function () {});
     }).catch(function (e) { output.info.textContent = e.message; });
   }
   function cancel() {
