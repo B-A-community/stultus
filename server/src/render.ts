@@ -179,7 +179,7 @@ export async function runNative(sourcePath: string | string[], directory: string
   signal.throwIfAborted()
   const child = start(directory)
   const pending = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void }>()
-  let sequence = 0, buffer = '', image: RenderImage | undefined, threadId: string | undefined
+  let sequence = 0, buffer = '', image: RenderImage | undefined, threadId: string | undefined, lastText = ''
   let finished = false, nativeFailure: Error | undefined
   let finish!: () => void, fail!: (reason: Error) => void
   const completed = new Promise<void>((yes, no) => { finish = yes; fail = no })
@@ -229,9 +229,16 @@ export async function runNative(sourcePath: string | string[], directory: string
         await rm(dirname(file), { recursive: false, force: true }).catch(() => {})
       }
     }
+    // Текст модели-рабочего: если картинки не будет, он объяснит почему.
+    if (packet.method === 'item/completed' && packet.params.item?.type === 'agentMessage' && typeof packet.params.item.text === 'string') {
+      lastText = packet.params.item.text.slice(0, 400)
+    }
     if (packet.method === 'turn/completed') {
       if (packet.params.turn?.status === 'failed') throw new Error(packet.params.turn.error?.message || 'Codex не смог завершить визуализацию.')
-      if (!image) throw new Error('Codex завершил ход без изображения. Доступ к генерации нужно проверить после входа.')
+      if (!image) {
+        console.warn(`[render] генератор завершил ход без изображения: ${lastText || '(без текста)'}`)
+        throw new Error(`Генератор не вернул изображение${lastText ? `: «${lastText}»` : ''}. Если это лимит подписки — подождите; иначе повторите запрос.`)
+      }
       finished = true; finish()
     }
   }

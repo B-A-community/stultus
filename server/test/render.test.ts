@@ -20,7 +20,7 @@ test('limit failure does not report success', async () => {
   await assert.rejects(runNative('viewport.png', process.cwd(), 'test', AbortSignal.timeout(5000), start('fail')), /не удалась/)
 })
 test('text-only completion is not treated as generated output', async () => {
-  await assert.rejects(runNative('viewport.png', process.cwd(), 'test', AbortSignal.timeout(5000), start('empty')), /без изображения/)
+  await assert.rejects(runNative('viewport.png', process.cwd(), 'test', AbortSignal.timeout(5000), start('empty')), /не вернул изображение/)
 })
 test('cancel while generating stops the worker', async () => {
   const controller = new AbortController()
