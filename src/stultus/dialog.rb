@@ -45,7 +45,11 @@ module BACommunity
           min_height:      460,
           style:           UI::HtmlDialog::STYLE_DIALOG
         )
-        dialog.set_file(File.join(PLUGIN_PATH, 'html', 'index.html'))
+        # Версия в адресе страницы и у скриптов/стилей в index.html — страховка
+        # от кэша встроенного браузера после обновления плагина (при смене
+        # VERSION поправить обе точки — см. CHANGELOG, правило версий).
+        page = File.join(PLUGIN_PATH, 'html', 'index.html').tr('\\', '/')
+        dialog.set_url('file:///' + page + '?v=' + VERSION)
         # Обработчик закрытия срабатывает с опозданием: если окно закрыли и
         # тут же открыли новое, старый обработчик обнулял ссылку уже на новое.
         dialog.set_on_closed do
