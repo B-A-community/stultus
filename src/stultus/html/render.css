@@ -3,7 +3,7 @@
 .render__head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}
 .render__title{margin-right:auto;font-size:12px;font-weight:500}.render__switch{display:flex;gap:4px}.render__switch button{font-size:10px;padding:5px 9px}.render__switch button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
 .render__image{display:block;width:100%;max-height:70vh;object-fit:contain;background:var(--bg)}
-.render__footer{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 14px}.render__note{font-size:11px;color:var(--muted);flex:1;min-width:130px}.render__save{font-size:11px}.render__status{font-size:12px;color:var(--muted);padding:0 14px 12px;overflow-wrap:anywhere}.render__status:empty{display:none}
+.render__footer{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 12px}.render__note{font-size:10px;color:var(--muted);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.render__save{font-size:10px;padding:5px 8px;white-space:nowrap}.render__status{font-size:12px;color:var(--muted);padding:0 14px 12px;overflow-wrap:anywhere}.render__status:empty{display:none}
 .card--render .card__preview{max-height:260px;object-fit:contain}.card--render.is-failed{border-color:var(--danger)}.card--render.is-failed:before{content:'ВИЗУАЛИЗАЦИЯ НЕ СОЗДАНА';color:var(--danger)}
 .card--render .card__editor{display:block;width:100%;margin:0 0 12px;padding:10px 12px;resize:vertical;min-height:120px;font:inherit;line-height:1.5;color:var(--text);background:var(--raised);border:1px solid var(--line);border-radius:8px}.card--render .card__editor:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .is-zoomable{cursor:zoom-in}
@@ -33,3 +33,22 @@
 .mask__bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 16px;border-top:1px solid var(--line);background:var(--surface)}
 .mask__hint{flex:1;min-width:200px;font-size:12px;color:var(--text-2)}.mask__size{display:flex;align-items:center;gap:6px;font-size:12px}.mask__size input{accent-color:var(--accent);width:110px}
 .mask__bar .btn[aria-pressed=true]{border-color:var(--accent);color:var(--accent-text)}
+
+/* Узкое окно: композер не должен выталкивать кнопку отправки за край. */
+.composer__row{min-width:0}
+.composer__buttons{flex-wrap:nowrap;min-width:0}
+.composer__context{flex:1 1 auto;min-width:0;overflow:hidden;white-space:nowrap}
+.composer__context #contextLabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.composer__buttons .btn,.composer__buttons .iconbtn{flex:none}
+/* Рисовалка: масштаб и панорама. */
+.mask__stage{position:relative;overflow:hidden}
+.mask__frame{position:relative;transform-origin:center center;will-change:transform}
+.mask__view{display:block;border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.6);cursor:crosshair;touch-action:none;image-rendering:auto}
+.mask__out{font:10px var(--mono);color:var(--muted);min-width:44px}
+/* Узкое окно: ряд провайдера и шапка сжимаются, а не растягивают сетку. */
+.app{min-width:0;overflow-x:hidden}
+.provider{flex-wrap:wrap;row-gap:6px;min-width:0}
+.provider select{min-width:0;text-overflow:ellipsis}
+.provider__field{flex:0 1 auto}
+.topbar{flex-wrap:wrap;row-gap:6px;min-width:0}
+@media (max-width:420px){.provider{padding-left:16px;padding-right:16px}.topbar{padding-left:16px;padding-right:16px}.provider select{max-width:150px}}

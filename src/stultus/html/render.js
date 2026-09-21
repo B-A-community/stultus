@@ -208,7 +208,7 @@ window.StultusRender = function (api) {
     before.setAttribute('aria-pressed', 'false'); after.setAttribute('aria-pressed', 'true');
     buttons.appendChild(before); buttons.appendChild(after); head.appendChild(title); head.appendChild(buttons);
     var img = element('img', 'render__image'); img.alt = 'ИИ-визуализация выбранного ракурса'; img.hidden = true; zoomable(img);
-    var footer = element('div', 'render__footer'), note = element('span', 'render__note', large ? 'ИИ-визуализация из плиток · проверьте стыки крупно' : 'ИИ-визуализация · сравните с исходником'), save = element('button', 'btn render__save', 'Сохранить PNG ↗');
+    var footer = element('div', 'render__footer'), note = element('span', 'render__note', large ? 'ИИ-визуализация из плиток' : 'ИИ-визуализация'), save = element('button', 'btn render__save', 'Сохранить PNG ↗');
     var refine = element('button', 'btn render__save', 'Доработать область…');
     save.disabled = refine.disabled = true;
     footer.appendChild(note); footer.appendChild(refine); footer.appendChild(save);
