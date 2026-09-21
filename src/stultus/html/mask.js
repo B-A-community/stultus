@@ -151,7 +151,7 @@ window.StultusMask = (function () {
         maskImg.data[i] = maskImg.data[i + 1] = maskImg.data[i + 2] = v; maskImg.data[i + 3] = 255;
       }
       octx.putImageData(maskImg, 0, 0);
-      var pct = Math.round(100 * covered / (paint.width * paint.height));
+      var pct = Math.max(1, Math.round(100 * covered / (paint.width * paint.height)));
       if (!covered) { hint.textContent = 'Ничего не закрашено: отметьте область или нажмите «Отмена».'; return; }
       close(); opts.onDone(out.toDataURL('image/png'), pct);
     };
