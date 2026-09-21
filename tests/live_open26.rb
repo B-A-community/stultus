@@ -1,0 +1,3 @@
+# Открыть окно Stultus (модули уже подгружены из папки Plugins при старте или перезагружаем).
+%w[constants screenshot render_assets overlay dialog].each { |f| load "C:/work/maksar-ruslan/staltus/src/stultus/#{f}.rb" }
+load 'C:/work/maksar-ruslan/staltus/tests/live_reopen.rb'
