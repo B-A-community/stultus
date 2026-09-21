@@ -7,6 +7,7 @@ import { getRecipe, listRecipes, saveRecipe } from './recipes.ts'
 import { randomUUID } from 'node:crypto'
 import { pngImage, renderConfigured, renderViewport, strengthTier, type EditOptions, type RenderImage } from './render.ts'
 import { LARGE_SIZES, SIZE_IDS, largeGenerations, largeSize, largeSizeList, renderLarge } from './tiles.ts'
+import { sendFrame } from './frames.ts'
 import { config } from './config.ts'
 
 /**
@@ -26,7 +27,7 @@ export const MCP_SERVER_NAME = 'stultus'
 export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'render_vray', 'scenes', 'save_recipe', 'get_recipe', 'undo', 'ask_user'] as const
 
 function build(conn: PluginConnection): McpServer {
-  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.17' })
+  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.18' })
 
   server.registerTool('render_viewport', {
     title: 'Визуализация текущего кадра',
@@ -77,12 +78,9 @@ function build(conn: PluginConnection): McpServer {
         const label = LARGE_SIZES[large].label
         const result = await renderLarge(large, source, finalPrompt, signal, text => conn.send({ type: 'render_status', id, text: `Большой кадр ${label}: ${text}` }), undefined, opts)
         signal.throwIfAborted()
-        shown = result.preview; sourceShown = result.source; width = result.width; height = result.height
+        sourceShown = result.source; width = result.width; height = result.height
         // Превью в ленту сразу, полный файл — кусками следом: окно пишет их на диск.
-        const CHUNK = 2 * 1024 * 1024
-        const chunks = Math.ceil(result.file.length / CHUNK)
-        conn.send({ type: 'render_result', id, prompt: finalPrompt, source: sourceShown, image: shown, large: true, full: { width, height, bytes: result.file.length, chunks } })
-        for (let i = 0; i < chunks; i++) conn.send({ type: 'render_chunk', id, index: i, total: chunks, data: result.file.subarray(i * CHUNK, (i + 1) * CHUNK).toString('base64') })
+        shown = (await sendFrame(conn, id, { file: result.file, width, height, source: sourceShown, prompt: finalPrompt })).shown
         note = ` Это «большой кадр» ${label} из плиток (${result.generations} генераций, плитки пустого фона взяты из эталона): у швов плиток возможны двоение кромок и разница тона, предупреди пользователя и предложи проверить стыки крупно. Тебе показано уменьшенное превью, полный файл сохранён у пользователя.`
       } else {
         conn.send({ type: 'render_status', id, text: 'Создаю визуализацию. Это может занять несколько минут…' })

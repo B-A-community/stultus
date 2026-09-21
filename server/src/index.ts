@@ -7,9 +7,9 @@ import { PluginConnection, type PluginMessage } from './connection.ts'
 import { handleMcp } from './mcp.ts'
 import { deleteRecipe, listRecipes } from './recipes.ts'
 import { renderConfigured } from './render.ts'
-import { cancelAllEdits, cancelEdit, runEdit } from './edit.ts'
+import { cancelAllEdits, cancelEdit, receiveUpload, runEdit } from './edit.ts'
 
-const VERSION = '0.2.17'
+const VERSION = '0.2.18'
 
 /** Живые окна SketchUp по id соединения. */
 const connections = new Map<string, PluginConnection>()
@@ -124,6 +124,9 @@ wss.on('connection', (ws) => {
         break
       case 'render_cancel':
         cancelEdit(conn, msg.id)
+        break
+      case 'render_upload':
+        receiveUpload(conn, msg)
         break
       case 'recipe_delete':
         deleteRecipe(msg.id)

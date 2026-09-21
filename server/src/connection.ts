@@ -56,7 +56,9 @@ export type PluginMessage =
     }
   | { type: 'tool_result'; call_id: string; ok: boolean; content?: string; image?: { mime: string; base64: string }; capture?: ToolResult['capture']; prompt?: string; size?: string; mask?: string; references?: string[]; strength?: number }
   /** Доработка готового кадра из окна, без хода модели: база — картинка, маска, референс, сила. */
-  | { type: 'render_edit'; id: string; prompt: string; base: string; mask?: string; references?: string[]; strength?: number }
+  | { type: 'render_edit'; id: string; prompt: string; base?: string; base_upload?: boolean; mask?: string; references?: string[]; strength?: number }
+  /** Полный кадр для доработки — кусками base64 по порядку, до сообщения render_edit. */
+  | { type: 'render_upload'; id: string; index: number; total: number; data: string }
   | { type: 'render_cancel'; id: string }
   | { type: 'cancel' }
   | { type: 'recipe_delete'; id: string }

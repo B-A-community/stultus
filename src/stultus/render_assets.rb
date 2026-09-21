@@ -68,6 +68,27 @@ module BACommunity
         { ok: true, id: id }
       end
 
+      # Сведения о полном файле кадра: есть ли превью (значит кадр большой), размер.
+      def file_info(id)
+        target, = paths(id)
+        return { ok: false, error: 'Кадр не найден на этом компьютере.' } unless File.file?(target)
+        head = File.binread(target, 24)
+        w, h = head.byteslice(16, 8).unpack('NN')
+        { ok: true, bytes: File.size(target), width: w, height: h, preview: File.file?(preview_path(id)) }
+      end
+
+      # Кусок полного файла для отправки на сервер: base64, индекс и число кусков.
+      def read_chunk(id, index, size)
+        target, = paths(id)
+        return { ok: false, error: 'Кадр не найден на этом компьютере.' } unless File.file?(target)
+        size = size.to_i.clamp(64 * 1024, 8 * 1024 * 1024)
+        total = (File.size(target) + size - 1) / size
+        index = index.to_i
+        return { ok: false, error: 'Нет такого куска' } if index.negative? || index >= total
+        data = File.binread(target, size, index * size)
+        { ok: true, index: index, total: total, data: Base64.strict_encode64(data) }
+      end
+
       # Кусок полного кадра. Пишем в .part, на последнем куске проверяем
       # заголовок PNG и переименовываем — недокачанный файл не станет кадром.
       def append_chunk(id, index, total, data)

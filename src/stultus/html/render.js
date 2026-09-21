@@ -273,7 +273,7 @@ window.StultusRender = function (api) {
       save.disabled = true;
       api.rb('save_render', { id: id }).then(function (r) { info.textContent = !r.ok ? r.error : r.cancelled ? '' : 'Сохранено: ' + r.path; }).catch(function (e) { info.textContent = e.message; }).finally(function () { save.disabled = false; });
     };
-    var current = { source: null, result: null, camera: null, capture: null };
+    var current = { source: null, result: null, camera: null, capture: null, id: id };
     // Доработать область: маска на результате, задание, референс, сила → генерация без хода модели.
     refine.onclick = function () {
       if (!current.result) return;
@@ -290,7 +290,13 @@ window.StultusRender = function (api) {
         go.onclick = function () {
           var text = ta.value.trim() || (prompt || 'Доработать отмеченную область, сохранив всё остальное.');
           form.remove();
-          startEdit({ base: current.result, camera: current.camera, capture: current.capture, prompt: text, mask: stripPrefix(maskUrl), references: reference.value(), strength: strength.value(), pct: pct });
+          // Размер наследуется: если на диске лежит полный кадр больше превью, на сервер уходит он.
+          api.rb('render_file_info', { id: current.id }).then(function (r) {
+            var full = r && r.ok && r.preview ? { id: current.id, bytes: r.bytes, width: r.width, height: r.height } : null;
+            startEdit({ base: current.result, full: full, camera: current.camera, capture: current.capture, prompt: text, mask: stripPrefix(maskUrl), references: reference.value(), strength: strength.value(), pct: pct });
+          }).catch(function () {
+            startEdit({ base: current.result, camera: current.camera, capture: current.capture, prompt: text, mask: stripPrefix(maskUrl), references: reference.value(), strength: strength.value(), pct: pct });
+          });
         };
       } });
     };
@@ -307,9 +313,31 @@ window.StultusRender = function (api) {
     var stop = element('button', 'btn card__stop', 'Остановить'); stop.onclick = function () { api.send({ type: 'render_cancel', id: id }); };
     card.appendChild(stop);
     var record = { name: 'render_edit', label: 'Доработка области', ok: null };
-    jobs[id] = { card: card, record: record, source: p.base, camera: p.camera, capture: p.capture, prompt: p.prompt, edit: true, stopButton: stop };
+    var job = jobs[id] = { card: card, record: record, source: p.base, camera: p.camera, capture: p.capture, prompt: p.prompt, edit: true, stopButton: stop };
     api.hideEmpty(); api.chat.appendChild(card); api.scroll();
-    api.send({ type: 'render_edit', id: id, prompt: p.prompt, base: p.base, mask: p.mask, references: p.references || undefined, strength: p.strength });
+    var text = card.querySelector('.card__text'), head = text.textContent;
+    if (!p.full) {
+      api.send({ type: 'render_edit', id: id, prompt: p.prompt, base: p.base, mask: p.mask, references: p.references || undefined, strength: p.strength });
+      return;
+    }
+    // Большой кадр: полный файл с диска на сервер кусками по 2 МБ, потом запрос.
+    var CHUNK = 2 * 1024 * 1024, total = Math.ceil(p.full.bytes / CHUNK), index = 0, cancelled = false;
+    stop.onclick = function () { cancelled = true; api.send({ type: 'render_cancel', id: id }); status({ id: id, text: 'Доработка остановлена.', failed: true }); };
+    function next() {
+      if (cancelled || jobs[id] !== job) return;
+      if (index >= total) {
+        text.textContent = head + '\n\nКадр ' + p.full.width + ' × ' + p.full.height + ' передан, дорабатываю в полном разрешении…';
+        api.send({ type: 'render_edit', id: id, prompt: p.prompt, base_upload: true, mask: p.mask, references: p.references || undefined, strength: p.strength });
+        return;
+      }
+      text.textContent = head + '\n\nПередаю полный кадр ' + p.full.width + ' × ' + p.full.height + ' на сервер: ' + (index + 1) + '/' + total;
+      api.rb('read_render_chunk', { id: p.full.id, index: index, size: CHUNK }).then(function (r) {
+        if (!r || !r.ok) throw new Error(r && r.error || 'кусок не прочитан');
+        api.send({ type: 'render_upload', id: id, index: r.index, total: r.total, data: r.data });
+        index += 1; total = r.total; next();
+      }).catch(function (e) { status({ id: id, text: 'Не удалось передать кадр: ' + e.message, failed: true }); });
+    }
+    next();
   }
   // Полные большие кадры приходят кусками после render_result; куски пишет
   // Ruby в файл по порядку, окно только передаёт их дальше по одному.

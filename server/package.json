@@ -1,7 +1,7 @@
 {
   "name": "stultus-gateway",
   "private": true,
-  "version": "0.2.17",
+  "version": "0.2.18",
   "description": "Gateway для плагина Stultus: принимает окна SketchUp по WebSocket, отдаёт их инструменты Claude Code и Codex как MCP-сервер",
   "type": "module",
   "main": "dist/index.js",

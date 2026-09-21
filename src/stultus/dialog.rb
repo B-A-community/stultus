@@ -155,6 +155,8 @@ module BACommunity
         end
         register(dialog, 'get_render') { |_id, p| RenderAssets.read(p['id']) }
         register(dialog, 'export_render') { |_id, p| RenderAssets.export_to(p['id'], p['path']) }
+        register(dialog, 'render_file_info') { |_id, p| RenderAssets.file_info(p['id']) }
+        register(dialog, 'read_render_chunk') { |_id, p| RenderAssets.read_chunk(p['id'], p['index'], p['size']) }
         register(dialog, 'save_render') { |_id, p| RenderAssets.export(p['id']) }
 
         register(dialog, 'save_sessions') do |_id, p|

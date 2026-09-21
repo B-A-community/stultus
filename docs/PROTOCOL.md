@@ -115,7 +115,9 @@ Gateway поднимает для каждого подключённого ок
 Сообщения окна без хода модели: `render_edit {id, prompt, base, mask?,
 references?, strength?}` — доработка кадра (база и маска — PNG base64),
 ответ теми же `render_status`/`render_result` (с `edit: true`);
-`render_cancel {id}` останавливает. В `tool_result` для `render_viewport`
+`render_cancel {id}` останавливает. Для большого кадра перед `render_edit`
+идут `render_upload {id, index, total, data}` (полный файл кусками), а в
+`render_edit` вместо `base` — `base_upload: true`. В `tool_result` для `render_viewport`
 окно добавляет `mask`, `references` (массив PNG base64, до 10) и `strength` (0–100). Отдельно модель ждёт ответа MCP-инструмента до `MCP_TOOL_TIMEOUT_MS` (45 минут): большой кадр 8K живёт внутри одного вызова около 15 минут.
 
 Claude Agent SDK получает сервер через `mcpServers` (`type: http`), Codex —
