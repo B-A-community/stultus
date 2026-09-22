@@ -92,6 +92,7 @@ Ruby → JS без запроса: `window.Stultus.selection({ count, text, by_t
 | `session` | `provider`, `id` | Идентификатор сессии провайдера — плагин сохраняет в модель |
 | `done` | `usage?` | Ход окончен. `usage = { input, output, cached, cost? }` |
 | `error` | `message` | Ход оборван с ошибкой |
+| `photo` | `id`, `title`, `note?`, `image{mime,base64}` | Снимок с панорамы улицы: карточка в ленте, клик открывает крупно |
 
 ### Инструменты (`tool_call.name`)
 
@@ -104,6 +105,7 @@ Ruby → JS без запроса: `window.Stultus.selection({ count, text, by_t
 | `take_screenshot` | `{ reason, view?, zoom_extents? }` | **пользователь**: карточка «Сделать снимок / Отказать» |
 | `undo` | `{}` | Ruby, сразу |
 | `build_massing` | `{ label, radius, count, sources[], massing }` | Ruby, сразу. `massing = { place: { lat, lon, label, source }, radius, buildings[], sources[], stats }`; здание: `{ id, type, name?, address?, levels?, height, minHeight?, heightSource: height|levels|2gis|estimate, outer: [[x,y]…], inners: [[[x,y]…]…], area, distance, target? }`, координаты в метрах от точки запроса (X восток, Y север) |
+| `street_view` | — | Инструмент сервера, плагину не уходит: готовый кадр приходит отдельным сообщением `photo` |
 | `ask_user` | `{ questions: [{ question, options?, multi? }] }` (старая форма `{ question, options }` тоже принимается) | JS показывает карточку со всеми вопросами (кнопки + «свой вариант»), отвечает «вопросы показаны, закончи ход»; ответы уходят одним сообщением пользователя «Ответы: 1. … — …» |
 
 ## 3. Gateway ↔ модель (MCP)

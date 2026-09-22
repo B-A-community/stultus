@@ -145,6 +145,22 @@
 
   function hideEmpty() { var e = $('chatEmpty'); if (e) e.hidden = true; }
 
+  // Снимок с панорамы улицы: картинка в ленте, клик — крупно.
+  function onPhoto(msg) {
+    if (!msg.image || !msg.image.base64) return;
+    hideEmpty();
+    var card = document.createElement('div'); card.className = 'photo';
+    var head = document.createElement('div'); head.className = 'photo__head'; head.textContent = msg.title || 'Панорама улицы';
+    var img = document.createElement('img'); img.className = 'photo__img';
+    img.src = 'data:' + (msg.image.mime || 'image/jpeg') + ';base64,' + msg.image.base64;
+    img.alt = msg.title || 'Панорама улицы';
+    img.title = 'Открыть крупно';
+    img.onclick = function () { if (window.StultusLightbox) window.StultusLightbox(img.src, img.alt); };
+    card.appendChild(head); card.appendChild(img);
+    if (msg.note) { var n = document.createElement('div'); n.className = 'photo__note'; n.textContent = msg.note; card.appendChild(n); }
+    chat.appendChild(card); scrollDown();
+  }
+
   function addMessage(role, text, opts) {
     hideEmpty();
     var el = $('tplMessage').content.firstElementChild.cloneNode(true);
@@ -326,6 +342,7 @@
       case 'done':
         onDone(msg);
         break;
+      case 'photo': onPhoto(msg); break;
       case 'recipes':
         state.recipes = msg.recipes || [];
         renderRecipes();

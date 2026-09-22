@@ -10,6 +10,8 @@ import { LARGE_SIZES, SIZE_IDS, largeGenerations, largeSize, largeSizeList, rend
 import { sendFrame } from './frames.ts'
 import { config } from './config.ts'
 import { collectMassing, summarize } from './massing.ts'
+import { bearingTo, distanceTo, findPanorama, renderView } from './panorama.ts'
+import { resolvePlace } from './geo.ts'
 
 /**
  * MCP-сервер «stultus» — инструменты одного окна SketchUp.
@@ -25,10 +27,10 @@ import { collectMassing, summarize } from './massing.ts'
 export const MCP_SERVER_NAME = 'stultus'
 
 /** Что модель называет в описаниях — единый источник для обоих провайдеров. */
-export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'render_vray', 'scenes', 'save_recipe', 'get_recipe', 'undo', 'ask_user', 'build_massing'] as const
+export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'render_vray', 'scenes', 'save_recipe', 'get_recipe', 'undo', 'ask_user', 'build_massing', 'street_view'] as const
 
 function build(conn: PluginConnection): McpServer {
-  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.22' })
+  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.23' })
 
   server.registerTool('render_viewport', {
     title: 'Визуализация текущего кадра',
@@ -100,6 +102,52 @@ function build(conn: PluginConnection): McpServer {
       const text = signal?.aborted ? 'Визуализация остановлена.' : error instanceof Error ? error.message : String(error)
       conn.send({ type: 'render_status', id, text, failed: true })
       return { content: [{ type: 'text' as const, text }], isError: true }
+    }
+  })
+
+  server.registerTool('street_view', {
+    title: 'Панорама улицы',
+    description: 'Снимок с панорамы Яндекса: как фотография с улицы, снятая с точки съёмки в сторону заданного места. ' +
+      'Нужен, чтобы ПОСМОТРЕТЬ на существующее здание своими глазами: посчитать этажи, увидеть материал и ритм фасада, ' +
+      'проверить, что построил массинг. Место задаётся адресом, координатами или ссылкой на карту или панораму. ' +
+      'Панорама сама находится рядом с местом; from позволяет встать в другой точке и посмотреть оттуда. ' +
+      'Кадр приходит картинкой тебе и в чат пользователю. Чтобы обойти здание, вызывай снова с координатами соседних ' +
+      'точек съёмки: они перечислены в ответе. Считая этажи, ориентируйся на ряды окон; цокольный и мансардный ряды ' +
+      'называй отдельно. Панорама снята в указанную дату, стройки и новые дома на ней могут отсутствовать.',
+    inputSchema: {
+      place: z.string().trim().min(2).max(1000).describe('На что смотреть: адрес, координаты «широта, долгота» или ссылка на карту/панораму'),
+      from: z.string().trim().max(1000).optional().describe('Откуда смотреть, если нужно отойти: координаты или адрес. По умолчанию ближайшая к месту точка съёмки'),
+      heading: z.number().min(0).max(360).optional().describe('Курс камеры в градусах (0 север, 90 восток). По умолчанию направлен на место'),
+      pitch: z.number().min(-30).max(70).optional().describe('Наклон камеры, градусы вверх. Для фасада целиком 20–35, по умолчанию 15'),
+      fov: z.number().min(20).max(110).optional().describe('Угол обзора по горизонтали, градусы. Шире — видно здание целиком, уже — детали. По умолчанию 75'),
+    },
+    annotations: { readOnlyHint: true },
+  }, async ({ place, from, heading, pitch, fov }) => {
+    const signal = conn.running?.signal
+    try {
+      const target = await resolvePlace(place, signal)
+      const stand = from ? await resolvePlace(from, signal) : target
+      conn.send({ type: 'status', text: `Ищу панораму у «${(from || place).slice(0, 50)}»…` })
+      const pano = await findPanorama(stand, signal)
+      if (!pano) return { content: [{ type: 'text' as const, text: `Панорам в точке ${stand.lat.toFixed(5)}, ${stand.lon.toFixed(5)} нет. Попробуй соседнюю улицу или другие координаты.` }], isError: true }
+      const away = distanceTo(pano, target)
+      // Если панорама стоит вплотную к цели, смотреть на неё бессмысленно — берём направление улицы.
+      const aim = heading ?? (away > 4 ? bearingTo(pano, target) : pano.links[0]?.heading ?? 0)
+      const view = await renderView(pano, { heading: aim, pitch: pitch ?? 15, fov: fov ?? 75, width: 1280, height: 860 }, signal)
+      const image = { mime: 'image/jpeg', base64: view.jpeg.toString('base64') }
+      const title = `${pano.street || 'Панорама'} · ${pano.date}`
+      const note = `курс ${Math.round(view.heading)}°, наклон ${view.pitch}°, обзор ${view.fov}°` + (away > 4 ? `, до цели ${Math.round(away)} м` : '')
+      conn.send({ type: 'photo', id: randomUUID(), title, note, image })
+      const steps = pano.links.map(l => `${Math.round(l.heading)}° ${l.name ?? ''} (${l.lat.toFixed(6)}, ${l.lon.toFixed(6)})`).join('; ')
+      return { content: [
+        { type: 'text' as const, text: `Панорама «${pano.street || 'без названия'}», снята ${pano.date}. Точка съёмки ${pano.lat.toFixed(6)}, ${pano.lon.toFixed(6)}; ` +
+          `камера смотрит на ${Math.round(view.heading)}° (${away > 4 ? `до цели ${Math.round(away)} м` : 'цель под ногами, смотрю вдоль улицы'}), наклон ${view.pitch}°, обзор ${view.fov}°. ` +
+          `Это фотография с улицы, а не модель: считай по ней этажи и фасад, но помни дату съёмки. ` +
+          (steps ? `Соседние точки съёмки, чтобы пройти дальше: ${steps}.` : 'Соседних точек съёмки сервис не назвал.') },
+        { type: 'image' as const, data: image.base64, mimeType: image.mime },
+      ] }
+    } catch (error) {
+      return { content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }], isError: true }
     }
   })
 
