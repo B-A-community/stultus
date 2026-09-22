@@ -26,6 +26,12 @@ cp deploy/.env.example /opt/stultus/.env && chmod 600 /opt/stultus/.env
   (без `NODE_USE_ENV_PROXY` процессы моделей молча висят).
 - Пределы можно оставить: `TURN_TOKEN_BUDGET=400000`,
   `TURN_MAX_TOOL_CALLS=60`.
+- Массинг по карте работает без ключей (OpenStreetMap: зеркало Overpass
+  у VK Карт и Nominatim). Ключи по желанию: `YANDEX_GEOCODER_KEY`
+  (developer.tech.yandex.ru, «JavaScript API и HTTP Геокодер», бесплатный
+  лимит) — адреса через Яндекс; `DGIS_KEY` (dev.2gis.ru, Places API) —
+  адреса и этажность через 2GIS. Сервер должен доставать до
+  `maps.mail.ru`, `overpass-api.de`, `nominatim.openstreetmap.org`.
 
 Вход к моделям (от того пользователя, который будет запускать сервис):
 

@@ -183,12 +183,14 @@
     if (call.name === 'ask_user') return a.question || '';
     if (call.name === 'select') return a.mode === 'clear' ? 'снять выделение' : 'выделить ' + ((a.ids || []).length) + ' объект(ов)';
     if (call.name === 'scenes') return 'сцены: ' + (a.action || 'list') + (a.name ? ' «' + a.name + '»' : '');
+    if (call.name === 'build_massing') return 'Массинг по карте: ' + (a.label || '') + ' · ' + (a.count || 0) + ' зд. · радиус ' + (a.radius || '?') + ' м';
     return '';
   }
 
   function toolArgsPreview(call) {
     var a = call.args || {};
     if (call.name === 'execute_ruby') return String(a.code || '');
+    if (call.name === 'build_massing') return 'Место: ' + (a.label || '') + '\nРадиус: ' + (a.radius || '?') + ' м\nЗданий: ' + (a.count || 0) + '\nИсточники: ' + ((a.sources || []).join(', '));
     return JSON.stringify(a, null, 2);
   }
 
@@ -745,6 +747,12 @@
     else if (msg.name === 'select') run = rb('select', msg.args || {});
     else if (msg.name === 'render_vray') run = rb('render_vray', msg.args || {});
     else if (msg.name === 'undo') run = rb('undo');
+    else if (msg.name === 'build_massing') {
+      // Как execute_ruby: первый успешный вызов хода открывает пункт Undo, остальные сливаются.
+      var firstOp = !state.turnOpened;
+      run = rb('build_massing', { massing: msg.args.massing, transparent: !firstOp })
+        .then(function (result) { if (result && result.ok !== false) { state.turnOpened = true; state.turnOps += 1; } return result; });
+    }
     else run = Promise.reject(new Error('Неизвестный инструмент: ' + msg.name));
 
     run.then(function (result) {
@@ -778,6 +786,7 @@
       if (result.output) lines.push('stdout:\n' + result.output);
       return lines.join('\n');
     }
+    if (name === 'build_massing' && result.ok !== false) return result.text || JSON.stringify(result);
     if (name === 'render_vray' && result.ok !== false) {
       return 'Рендер V-Ray готов: ' + result.width + '×' + result.height + ', ' + result.seconds + ' с, состояние ' + result.state + '. Картинка приложена.' +
         (result.saved_to ? ' Сохранено: ' + result.saved_to : '') + (result.save_error ? ' Не удалось сохранить на диск: ' + result.save_error : '');

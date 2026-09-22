@@ -9,6 +9,7 @@ import { pngImage, renderConfigured, renderViewport, strengthTier, type EditOpti
 import { LARGE_SIZES, SIZE_IDS, largeGenerations, largeSize, largeSizeList, renderLarge } from './tiles.ts'
 import { sendFrame } from './frames.ts'
 import { config } from './config.ts'
+import { collectMassing, summarize } from './massing.ts'
 
 /**
  * MCP-сервер «stultus» — инструменты одного окна SketchUp.
@@ -24,10 +25,10 @@ import { config } from './config.ts'
 export const MCP_SERVER_NAME = 'stultus'
 
 /** Что модель называет в описаниях — единый источник для обоих провайдеров. */
-export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'render_vray', 'scenes', 'save_recipe', 'get_recipe', 'undo', 'ask_user'] as const
+export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'render_vray', 'scenes', 'save_recipe', 'get_recipe', 'undo', 'ask_user', 'build_massing'] as const
 
 function build(conn: PluginConnection): McpServer {
-  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.20' })
+  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.21' })
 
   server.registerTool('render_viewport', {
     title: 'Визуализация текущего кадра',
@@ -99,6 +100,41 @@ function build(conn: PluginConnection): McpServer {
       const text = signal?.aborted ? 'Визуализация остановлена.' : error instanceof Error ? error.message : String(error)
       conn.send({ type: 'render_status', id, text, failed: true })
       return { content: [{ type: 'text' as const, text }], isError: true }
+    }
+  })
+
+  server.registerTool('build_massing', {
+    title: 'Массинг окружения по карте',
+    description: 'Строит в модели массинг — упрощённые объёмы зданий вокруг точки: по адресу, паре координат ' +
+      'или ссылке на Яндекс.Карты / 2GIS / Google / OSM (включая ссылки на панораму: координаты берутся из адреса ' +
+      'страницы, саму панораму смотреть не нужно и нельзя). Контуры и этажность — OpenStreetMap через зеркало VK Карт, ' +
+      'при ключах — геокодеры Яндекса/2GIS и этажность 2GIS. В модели появляется группа «Массинг» на своём слое, ' +
+      'внутри группа на здание с именем, адресом, этажностью и высотой; земля Z=0, метры, X на восток, Y на север, ' +
+      'начало координат — точка запроса. Здания без данных получают высоту по типу и помечены как оценка — ' +
+      'перескажи это пользователю. Вызывай при просьбах «сделай массинг / окружение / подоснову / контекст по ' +
+      'адресу, по карте, по ссылке, по панораме». Не рисуй окружение вручную по описанию: этот инструмент даёт ' +
+      'реальные контуры. preview: true — только сводка без построения (чтобы обсудить радиус).',
+    inputSchema: {
+      place: z.string().trim().min(2).max(1000).describe('Адрес («Москва, Гончарная 26к1»), координаты («55.7430, 37.6501») или ссылка на карту/панораму как есть'),
+      radius: z.number().int().min(30).max(1500).optional().describe('Радиус вокруг точки в метрах, по умолчанию 250'),
+      preview: z.boolean().optional().describe('Только найти и описать здания, ничего не строить'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+  }, async ({ place, radius, preview }) => {
+    const signal = conn.running?.signal
+    try {
+      const r = radius ?? 250
+      conn.send({ type: 'status', text: `Ищу здания вокруг «${place.slice(0, 60)}» в радиусе ${r} м…` })
+      const massing = await collectMassing(place, r, signal)
+      const summary = summarize(massing)
+      if (preview) return { content: [{ type: 'text' as const, text: `Предпросмотр, в модели ничего не построено.\n${summary}` }] }
+      if (!massing.buildings.length) return { content: [{ type: 'text' as const, text: summary }], isError: true }
+      const built = await conn.callTool('build_massing', {
+        label: massing.place.label, radius: massing.radius, count: massing.buildings.length, sources: massing.sources, massing,
+      })
+      return { content: [{ type: 'text' as const, text: `${built.content}\n${summary}` }], isError: !built.ok }
+    } catch (error) {
+      return { content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }], isError: true }
     }
   })
 

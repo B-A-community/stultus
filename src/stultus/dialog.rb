@@ -110,6 +110,10 @@ module BACommunity
         end
 
         register(dialog, 'undo') { |_id, _p| Runner.undo }
+        # Массинг по карте: контуры в метрах уже посчитаны на сервере.
+        register(dialog, 'build_massing') do |_id, p|
+          Massing.build(p['massing'] || {}, transparent: p['transparent'] ? true : false)
+        end
         # Карточка ждёт решения человека — поднять окно над SketchUp.
         register(dialog, 'attention') do |_id, _p|
           dialog.bring_to_front

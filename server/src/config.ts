@@ -116,6 +116,21 @@ export const config = {
    */
   mcpToolTimeoutMs: Number(process.env.MCP_TOOL_TIMEOUT_MS ?? 45 * 60 * 1000),
 
+  /**
+   * Массинг по карте: контуры зданий из OpenStreetMap через Overpass.
+   * Зеркала по порядку, первое ответившее побеждает: у VK Карт (Россия),
+   * затем overpass-api.de и kumi.systems. Геокодер адресов: Яндекс и 2GIS
+   * по ключам (российские, приоритет), без ключей — Nominatim OSM. Ключ
+   * 2GIS заодно даёт этажность зданий там, где в OSM её нет.
+   */
+  overpassUrls: (process.env.OVERPASS_URLS ?? 'https://maps.mail.ru/osm/tools/overpass/api/interpreter,https://overpass-api.de/api/interpreter,https://overpass.kumi.systems/api/interpreter').split(',').map(s => s.trim()).filter(Boolean),
+  nominatimUrl: process.env.NOMINATIM_URL ?? 'https://nominatim.openstreetmap.org',
+  yandexGeocoderKey: process.env.YANDEX_GEOCODER_KEY ?? '',
+  dgisKey: process.env.DGIS_KEY ?? '',
+  /** Таймаут одного запроса к геосервису, мс; предел радиуса массинга, м. */
+  geoTimeoutMs: Number(process.env.GEO_TIMEOUT_MS ?? 30_000),
+  geoMaxRadius: Number(process.env.GEO_MAX_RADIUS ?? 1500),
+
   /** Рабочий каталог для процессов моделей (там же AGENTS.md для Codex). */
   workDir: process.env.WORK_DIR ?? `${process.cwd()}/data/work`,
 
