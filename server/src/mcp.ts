@@ -28,7 +28,7 @@ export const MCP_SERVER_NAME = 'stultus'
 export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'render_vray', 'scenes', 'save_recipe', 'get_recipe', 'undo', 'ask_user', 'build_massing'] as const
 
 function build(conn: PluginConnection): McpServer {
-  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.21' })
+  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.22' })
 
   server.registerTool('render_viewport', {
     title: 'Визуализация текущего кадра',
@@ -110,7 +110,8 @@ function build(conn: PluginConnection): McpServer {
       'страницы, саму панораму смотреть не нужно и нельзя). Контуры и этажность — OpenStreetMap через зеркало VK Карт, ' +
       'при ключах — геокодеры Яндекса/2GIS и этажность 2GIS. В модели появляется группа «Массинг» на своём слое, ' +
       'внутри группа на здание с именем, адресом, этажностью и высотой; земля Z=0, метры, X на восток, Y на север, ' +
-      'начало координат — точка запроса. Здания без данных получают высоту по типу и помечены как оценка — ' +
+      'начало координат — точка запроса. Зданиям без данных высота подбирается по соседним домам того же типа, ' +
+      'а если соседей нет — по типу здания; и то и другое помечено как условное — ' +
       'перескажи это пользователю. Вызывай при просьбах «сделай массинг / окружение / подоснову / контекст по ' +
       'адресу, по карте, по ссылке, по панораме». Не рисуй окружение вручную по описанию: этот инструмент даёт ' +
       'реальные контуры. preview: true — только сводка без построения (чтобы обсудить радиус).',

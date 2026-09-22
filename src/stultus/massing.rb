@@ -17,7 +17,7 @@ module BACommunity
       LAYER_NAME     = 'Stultus · Массинг'
       MATERIALS = {
         'known'    => ['Stultus массинг',          [205, 205, 200]],
-        'estimate' => ['Stultus массинг · оценка', [214, 196, 160]],
+        'estimate' => ['Stultus массинг · высота без данных', [214, 196, 160]],
         'target'   => ['Stultus массинг · объект', [232, 160, 70]]
       }.freeze
 
@@ -71,7 +71,8 @@ module BACommunity
             seconds:  (Time.now - started).round(2),
             text:     "Массинг построен: #{built} зданий в группе «#{top.name}» (id #{top.entityID}, слой «#{LAYER_NAME}»), " \
                       "начало координат модели — точка запроса, земля Z=0. Материалы: серый — высота по данным, " \
-                      "бежевый — высота оценена по типу здания, оранжевый — запрошенный адрес." \
+                      "бежевый — высота без данных (подобрана по соседям или оценена по типу, см. имя группы), " \
+                      "оранжевый — запрошенный адрес." \
                       "#{failed.empty? ? '' : " Не построились #{failed.length}: #{failed.first(5).join('; ')}."}"
           }
         rescue StandardError => e
@@ -90,7 +91,12 @@ module BACommunity
         title = b['address'].to_s.strip if title.empty?
         title = b['type'].to_s if title.empty?
         levels = b['levels'] ? "#{b['levels']} эт. · " : ''
-        g.name = "#{title[0, 60]} · #{levels}#{b['height']} м#{b['heightSource'] == 'estimate' ? ' (оценка)' : ''}"
+        mark = case b['heightSource']
+               when 'estimate'   then ' (оценка по типу)'
+               when 'neighbours' then ' (по соседям)'
+               else ''
+               end
+        g.name = "#{title[0, 60]} · #{levels}#{b['height']} м#{mark}"
         %w[id type name address levels height minHeight heightSource area distance].each do |k|
           g.set_attribute('stultus_massing', k, b[k]) unless b[k].nil?
         end
@@ -113,7 +119,10 @@ module BACommunity
         height = 3.0 if height <= 0
         face.reverse! if face.normal.z < 0
         face.pushpull(height.m)
-        key = b['target'] ? 'target' : (b['heightSource'] == 'estimate' ? 'estimate' : 'known')
+        key = if b['target'] then 'target'
+              elsif %w[estimate neighbours].include?(b['heightSource']) then 'estimate'
+              else 'known'
+              end
         g.material = materials[key]
         g.entities.grep(Sketchup::Face).each { |f| f.material = materials[key] }
         g

@@ -7,7 +7,7 @@
  * проекция: на радиусе до полутора километров ошибка меньше сантиметра.
  */
 import { config } from './config.ts'
-import { enrich2gis, fetchBuildings, type Building, type HeightSource, type Ring } from './buildings.ts'
+import { UTILITY, enrich2gis, fetchBuildings, levelHeight, type Building, type HeightSource, type Ring } from './buildings.ts'
 import { fetchJson, resolvePlace, type GeoPoint, type Place } from './geo.ts'
 
 export type XY = [number, number]
@@ -74,6 +74,55 @@ function centroid(ring: XY[]): XY {
   return [x / ring.length, y / ring.length]
 }
 
+/** Середина пятна в метрах. */
+function centreOf(b: MassingBuilding): XY {
+  return centroid(b.outer)
+}
+
+/** Медиана числового ряда. */
+export function median(values: number[]): number {
+  const s = [...values].sort((a, b) => a - b)
+  const i = s.length >> 1
+  return s.length % 2 ? s[i]! : (s[i - 1]! + s[i]!) / 2
+}
+
+/**
+ * Высота по соседям вместо оценки по типу.
+ *
+ * Данных нет у каждого седьмого здания Москвы, а платить 2GIS за этажность
+ * незачем: соседние дома той же породы почти всегда той же высоты. Для
+ * каждого здания без данных берём медиану высот соседей в радиусе поиска —
+ * сначала того же типа и сопоставимого пятна, потом просто того же типа.
+ * Хозпостройки (гараж, сарай, навес) не трогаем: они одноэтажные рядом с
+ * любой застройкой. Источник помечается отдельно — это по-прежнему оценка,
+ * и пользователь об этом слышит.
+ */
+export function inferByNeighbours(list: MassingBuilding[], radius = 200, minSamples = 2): number {
+  const known = list.filter(b => b.heightSource === 'height' || b.heightSource === 'levels' || b.heightSource === '2gis')
+  if (known.length < minSamples) return 0
+  const centres = new Map(list.map(b => [b.id, centreOf(b)]))
+  let changed = 0
+  for (const b of list) {
+    if (b.heightSource !== 'estimate' || UTILITY.test(b.type)) continue
+    const c = centres.get(b.id)!
+    const near = known
+      .map(n => ({ n, d: Math.hypot(centres.get(n.id)![0] - c[0], centres.get(n.id)![1] - c[1]) }))
+      .filter(x => x.d <= radius)
+    // Сосед считается похожим, если у него тот же тип и пятно того же порядка.
+    const sameType = near.filter(x => x.n.type === b.type)
+    const similar = sameType.filter(x => x.n.area >= b.area / 4 && x.n.area <= b.area * 4)
+    const pick = similar.length >= minSamples ? similar : sameType.length >= minSamples ? sameType : null
+    if (!pick) continue
+    const height = Math.round(median(pick.map(x => x.n.height)) * 10) / 10
+    if (!(height > 0)) continue
+    b.height = height
+    b.levels = Math.max(1, Math.round(height / levelHeight(b.type)))
+    b.heightSource = 'neighbours'
+    changed++
+  }
+  return changed
+}
+
 /** Здания OSM → строки массинга в метрах; слишком мелкие и вырожденные — вон. */
 export function toMassing(place: Place, radius: number, buildings: Building[], minArea = 4): { buildings: MassingBuilding[]; skipped: number } {
   const out: MassingBuilding[] = []
@@ -111,7 +160,8 @@ export async function collectMassing(placeText: string, radius: number, signal?:
     }
   }
   const { buildings, skipped } = toMassing(place, r, fetched.buildings)
-  const byHeight: Record<HeightSource, number> = { height: 0, levels: 0, '2gis': 0, estimate: 0 }
+  inferByNeighbours(buildings)
+  const byHeight: Record<HeightSource, number> = { height: 0, levels: 0, '2gis': 0, neighbours: 0, estimate: 0 }
   for (const b of buildings) byHeight[b.heightSource]++
   return { place, radius: r, buildings, sources, stats: { total: buildings.length, byHeight, skipped, dgis } }
 }
@@ -119,7 +169,7 @@ export async function collectMassing(placeText: string, radius: number, signal?:
 function describe(b: MassingBuilding): string {
   const who = b.name ? `${b.name}${b.address ? ` (${b.address})` : ''}` : b.address || `${b.type} ${b.id}`
   const floors = b.levels ? `${b.levels} эт.` : ''
-  const src = b.heightSource === 'estimate' ? 'оценка' : b.heightSource === 'height' ? 'по высоте OSM' : b.heightSource === '2gis' ? 'этажность 2GIS' : 'этажность OSM'
+  const src = b.heightSource === 'estimate' ? 'оценка по типу' : b.heightSource === 'neighbours' ? 'по соседям' : b.heightSource === 'height' ? 'по высоте OSM' : b.heightSource === '2gis' ? 'этажность 2GIS' : 'этажность OSM'
   return `${who}: ${floors ? `${floors}, ` : ''}${b.height} м (${src}), пятно ${b.area} м², ${b.distance} м от центра${b.target ? ', ЭТО ЗАПРОШЕННЫЙ АДРЕС' : ''}`
 }
 
@@ -128,14 +178,19 @@ export function summarize(m: Massing, limit = 12): string {
   const s = m.stats
   const lines = [
     `Место: ${m.place.label} (${m.place.lat.toFixed(5)}, ${m.place.lon.toFixed(5)}; источник точки: ${m.place.source}). Радиус ${m.radius} м.`,
-    `Зданий: ${s.total} (данные: ${m.sources.join(', ')}). Высота по тегу height: ${s.byHeight.height}, по этажности OSM: ${s.byHeight.levels}${s.byHeight['2gis'] ? `, по этажности 2GIS: ${s.byHeight['2gis']}` : ''}, ОЦЕНКА по типу здания: ${s.byHeight.estimate}.` + (s.skipped ? ` Пропущено вырожденных/далёких контуров: ${s.skipped}.` : ''),
+    `Зданий: ${s.total} (данные: ${m.sources.join(', ')}). Высота по тегу height: ${s.byHeight.height}, по этажности OSM: ${s.byHeight.levels}${s.byHeight['2gis'] ? `, по этажности 2GIS: ${s.byHeight['2gis']}` : ''}, ПОДОБРАНА по соседним зданиям: ${s.byHeight.neighbours}, ОЦЕНКА по типу здания: ${s.byHeight.estimate}.` + (s.skipped ? ` Пропущено вырожденных/далёких контуров: ${s.skipped}.` : ''),
   ]
   if (s.total === 0) lines.push('В этом радиусе OSM не знает зданий — попробуйте больший радиус или другую точку.')
   const target = m.buildings.find(b => b.target)
   if (target) lines.push(`Запрошенный адрес: ${describe(target)}.`)
   const shown = m.buildings.slice(0, limit)
   if (shown.length) lines.push(`Ближайшие здания:\n${shown.map(b => `— ${describe(b)}`).join('\n')}` + (m.buildings.length > limit ? `\n… и ещё ${m.buildings.length - limit}.` : ''))
-  const estimated = m.buildings.filter(b => b.heightSource === 'estimate')
-  if (estimated.length) lines.push(`Высота ОЦЕНЕНА (данных нет) у ${estimated.length} зданий${estimated.length <= 8 ? `: ${estimated.map(b => b.address || b.name || b.id).join('; ')}` : ''}. Предупреди пользователя: такие объёмы условны, этажность можно уточнить.`)
+  const guessed = m.buildings.filter(b => b.heightSource === 'neighbours' || b.heightSource === 'estimate')
+  if (guessed.length) {
+    const byNeighbours = guessed.filter(b => b.heightSource === 'neighbours').length
+    lines.push(`Высоты БЕЗ ДАННЫХ у ${guessed.length} зданий из ${m.stats.total}: ${byNeighbours} подобрано по соседним домам того же типа, ${guessed.length - byNeighbours} оценено по типу здания` +
+      (guessed.length <= 8 ? ` (${guessed.map(b => b.address || b.name || b.id).join('; ')})` : '') +
+      '. Предупреди пользователя: эти объёмы условны, этажность можно назвать словами и я поправлю.')
+  }
   return lines.join('\n')
 }

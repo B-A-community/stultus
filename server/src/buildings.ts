@@ -17,7 +17,14 @@ import { fetchJson, type GeoPoint } from './geo.ts'
 /** Кольцо контура: [долгота, широта], без повтора первой точки в конце. */
 export type Ring = Array<[number, number]>
 
-export type HeightSource = 'height' | 'levels' | '2gis' | 'estimate'
+export type HeightSource = 'height' | 'levels' | '2gis' | 'neighbours' | 'estimate'
+
+/**
+ * Хозпостройки: гараж, сарай, киоск, навес. Их этажность не зависит от
+ * соседей — рядом с двадцатиэтажкой гараж остаётся одноэтажным, поэтому
+ * подбор по соседям на них не распространяется.
+ */
+export const UTILITY = /^(garage|garages|shed|hut|kiosk|service|roof|carport|toilets|guardhouse|booth|transformer_tower|greenhouse|container|bunker|storage_tank|silo)$/
 
 export interface Building {
   /** way/123, relation/456 — идентификатор OSM. */

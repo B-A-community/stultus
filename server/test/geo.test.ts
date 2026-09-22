@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { geocodeNominatim, parsePoint, resolvePlace } from '../src/geo.ts'
 import { assembleRings, enrich2gis, fetchBuildings, heightFromTags, overpassQuery, parseLength, parseOverpass, pointInRing } from '../src/buildings.ts'
-import { cleanRing, collectMassing, project, summarize, toMassing } from '../src/massing.ts'
+import { cleanRing, collectMassing, inferByNeighbours, median, project, summarize, toMassing, type MassingBuilding } from '../src/massing.ts'
 import type { Place } from '../src/geo.ts'
 
 const YANDEX_PANORAMA = 'https://yandex.ru/maps/213/moscow/house/goncharnaya_ulitsa_26k1/Z04YcANpSEYOQFtvfXt1c3VjYA==/?l=stv%2Csta&ll=37.650060%2C55.743020&panorama%5Bdirection%5D=156.464938%2C0.000000&panorama%5Bfull%5D=true&panorama%5Bpoint%5D=37.649358%2C55.743140&panorama%5Bspan%5D=114.574557%2C60.000000&z=18.92'
@@ -123,4 +123,56 @@ test('enrich2gis: этажность подставляется по точке 
   assert.deepEqual(r, { matched: 2, total: 3 })
   assert.equal(list[0]!.levels, 5); assert.equal(list[0]!.heightSource, '2gis'); assert.equal(list[0]!.height, 18)
   assert.equal(list[1]!.levels, 12)
+})
+
+/** Здание для проверки подбора по соседям: квадрат со стороной по площади. */
+function box(id: string, x: number, y: number, side: number, type: string, height: number, source: 'levels' | 'estimate'): MassingBuilding {
+  const h = side / 2
+  return {
+    id, type, height, heightSource: source, levels: source === 'levels' ? Math.round(height / 3) : undefined,
+    outer: [[x - h, y - h], [x + h, y - h], [x + h, y + h], [x - h, y + h]], inners: [],
+    area: side * side, distance: Math.round(Math.hypot(x, y)),
+  }
+}
+
+test('median: чётное и нечётное число значений', () => {
+  assert.equal(median([9]), 9); assert.equal(median([3, 1, 2]), 2); assert.equal(median([4, 1, 3, 2]), 2.5)
+})
+
+test('высота по соседям: берётся медиана похожих, хозпостройки и одиночки не трогаются', () => {
+  const list = [
+    box('way/1', 0, 0, 30, 'apartments', 27, 'levels'),
+    box('way/2', 40, 0, 30, 'apartments', 30, 'levels'),
+    box('way/3', 0, 40, 30, 'apartments', 24, 'levels'),
+    // Без данных, рядом с тремя жилыми того же размера → медиана 27.
+    box('way/4', 20, 20, 30, 'apartments', 15, 'estimate'),
+    // Гараж рядом с ними остаётся одноэтажным.
+    box('way/5', 25, 25, 6, 'garage', 3.2, 'estimate'),
+    // Офис: соседей того же типа нет → остаётся оценкой по типу.
+    box('way/6', 10, 10, 20, 'office', 14.4, 'estimate'),
+    // Далеко (600 м) от жилых → соседей в радиусе нет.
+    box('way/7', 600, 600, 30, 'apartments', 15, 'estimate'),
+  ]
+  const changed = inferByNeighbours(list, 200)
+  assert.equal(changed, 1)
+  const [four, garage, office, far] = [list[3]!, list[4]!, list[5]!, list[6]!]
+  assert.equal(four.height, 27); assert.equal(four.heightSource, 'neighbours'); assert.equal(four.levels, 9)
+  assert.equal(garage.heightSource, 'estimate'); assert.equal(garage.height, 3.2)
+  assert.equal(office.heightSource, 'estimate')
+  assert.equal(far.heightSource, 'estimate')
+  // Известных соседей меньше порога — ничего не меняем.
+  assert.equal(inferByNeighbours([box('way/8', 0, 0, 30, 'apartments', 15, 'estimate')], 200), 0)
+})
+
+test('подбор по соседям пропускает здания несопоставимого пятна, если похожих хватает', () => {
+  const list = [
+    box('way/1', 0, 0, 40, 'retail', 16, 'levels'),
+    box('way/2', 30, 0, 40, 'retail', 20, 'levels'),
+    box('way/3', 0, 30, 6, 'retail', 4, 'levels'),
+    box('way/4', 15, 15, 5, 'retail', 8, 'estimate'),
+  ]
+  inferByNeighbours(list, 200)
+  // Для мелкого павильона похожих по площади нет (минимум два), поэтому берётся медиана всех retail: 16.
+  assert.equal(list[3]!.heightSource, 'neighbours')
+  assert.equal(list[3]!.height, 16)
 })
