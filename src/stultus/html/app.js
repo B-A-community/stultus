@@ -157,7 +157,8 @@
     img.title = 'Открыть крупно';
     img.onclick = function () { if (window.StultusLightbox) window.StultusLightbox(img.src, img.alt); };
     card.appendChild(head); card.appendChild(img);
-    if (msg.note) { var n = document.createElement('div'); n.className = 'photo__note'; n.textContent = msg.note; card.appendChild(n); }
+    // Подпись обрезается двумя строками, полностью видна при наведении.
+    if (msg.note) { var n = document.createElement('div'); n.className = 'photo__note'; n.textContent = msg.note; n.title = msg.note; card.appendChild(n); }
     chat.appendChild(card); scrollDown();
   }
 
