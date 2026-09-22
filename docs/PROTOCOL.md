@@ -106,6 +106,7 @@ Ruby → JS без запроса: `window.Stultus.selection({ count, text, by_t
 | `undo` | `{}` | Ruby, сразу |
 | `build_massing` | `{ label, radius, count, sources[], massing }` | Ruby, сразу. `massing = { place: { lat, lon, label, source }, radius, buildings[], sources[], stats }`; здание: `{ id, type, name?, address?, levels?, height, minHeight?, heightSource: height|levels|2gis|estimate, outer: [[x,y]…], inners: [[[x,y]…]…], area, distance, target? }`, координаты в метрах от точки запроса (X восток, Y север) |
 | `street_view` | — | Инструмент сервера, плагину не уходит: готовый кадр приходит отдельным сообщением `photo` |
+| `browse` | — | Инструмент сервера: браузер на gateway, снимок окна приходит сообщением `photo` |
 | `ask_user` | `{ questions: [{ question, options?, multi? }] }` (старая форма `{ question, options }` тоже принимается) | JS показывает карточку со всеми вопросами (кнопки + «свой вариант»), отвечает «вопросы показаны, закончи ход»; ответы уходят одним сообщением пользователя «Ответы: 1. … — …» |
 
 ## 3. Gateway ↔ модель (MCP)

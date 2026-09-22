@@ -8,8 +8,9 @@ import { handleMcp } from './mcp.ts'
 import { deleteRecipe, listRecipes } from './recipes.ts'
 import { renderConfigured } from './render.ts'
 import { cancelAllEdits, cancelEdit, receiveUpload, runEdit } from './edit.ts'
+import { closeSession } from './browser.ts'
 
-const VERSION = '0.2.23'
+const VERSION = '0.2.24'
 
 /** Живые окна SketchUp по id соединения. */
 const connections = new Map<string, PluginConnection>()
@@ -138,6 +139,7 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     cancelAllEdits(conn)
+    void closeSession(conn.id)
     conn.dispose()
     connections.delete(conn.id)
     console.log(`[ws] отключение ${conn.id.slice(0, 8)} (всего ${connections.size})`)

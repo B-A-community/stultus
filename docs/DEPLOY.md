@@ -26,6 +26,12 @@ cp deploy/.env.example /opt/stultus/.env && chmod 600 /opt/stultus/.env
   (без `NODE_USE_ENV_PROXY` процессы моделей молча висят).
 - Пределы можно оставить: `TURN_TOKEN_BUDGET=400000`,
   `TURN_MAX_TOOL_CALLS=60`.
+- Браузер для прогулки по панораме ставится на сервер один раз:
+  `npm i` подтянет Playwright, затем `npx playwright install --with-deps
+  chromium` (около 450 МБ на диске). Без него инструмент `browse` честно
+  скажет, что браузера нет, а всё остальное продолжит работать.
+  Память: вкладка с панорамой занимает 300–600 МБ, поэтому она сама
+  закрывается после простоя (`BROWSER_IDLE_MS`).
 - Массинг по карте работает без ключей (OpenStreetMap: зеркало Overpass
   у VK Карт и Nominatim); высоты без данных подбираются по соседям.
   Ключи по желанию: `YANDEX_GEOCODER_KEY` (developer.tech.yandex.ru,

@@ -131,6 +131,15 @@ export const config = {
   geoTimeoutMs: Number(process.env.GEO_TIMEOUT_MS ?? 30_000),
   geoMaxRadius: Number(process.env.GEO_MAX_RADIUS ?? 1500),
 
+  /**
+   * Браузер на сервере (Playwright + Chromium): модель открывает страницу
+   * и ходит по ней — например, гуляет по панораме Яндекса стрелками.
+   * Вкладка закрывается сама после простоя: на сервере с двумя гигабайтами
+   * памяти забытая вкладка дорога.
+   */
+  browserIdleMs: Number(process.env.BROWSER_IDLE_MS ?? 10 * 60 * 1000),
+  browserTimeoutMs: Number(process.env.BROWSER_TIMEOUT_MS ?? 90 * 1000),
+
   /** Рабочий каталог для процессов моделей (там же AGENTS.md для Codex). */
   workDir: process.env.WORK_DIR ?? `${process.cwd()}/data/work`,
 
