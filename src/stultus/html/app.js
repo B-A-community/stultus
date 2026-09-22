@@ -80,7 +80,7 @@
     selection: null,   // { count, text, by_type, definitions } — живое выделение из SketchUp
     archive: null,     // { count, at } — удалённая переписка, которую можно вернуть
     turnOps: 0,        // сколько успешных execute_ruby было в текущем ходе
-    turnOpened: false, // открыт ли пункт Undo этого хода (первый успешный вызов)
+    turnId: '',        // метка хода для журнала шагов Undo в SketchUp (undo_ledger.rb)
     turnLabel: '',
     recipes: [],       // копилка приёмов с gateway
     accent: 'lime',    // цвет этого окна (хранится в файле модели)
@@ -418,8 +418,11 @@
     setBusy(true);
     state.turn += 1;
     state.turnOps = 0;
-    state.turnOpened = false;
+    // Метка хода уникальна и после переоткрытия окна: номер хода начинается заново.
+    state.turnId = state.turn + '-' + Date.now().toString(36);
     state.turnLabel = text.replace(/\s+/g, ' ').slice(0, 50);
+    // «Отменить ход» живёт только под последним ответом.
+    [].forEach.call(chat.querySelectorAll('.msg__undo'), function (b) { b.remove(); });
     startCurrent(provider);
 
     // Выделение уходит всегда: это то, о чём пользователь говорит «это».
@@ -555,12 +558,47 @@
   // «Запомнить приём»: под последним ответом модели, если в ходе были
   // изменения модели. Нажатие просит модель опросить пользователя и сохранить
   // приём в копилку через инструмент save_recipe.
+  function stepLabel(label) {
+    var task = (state.turnLabel || '').slice(0, 28);
+    return (task ? task + ' · ' : '') + (label || 'шаг ' + (state.turnOps + 1));
+  }
+
+  // «Отменить ход»: все шаги модели этого хода одним нажатием. Ruby снимает
+  // их, только пока они лежат сверху истории; если после хода в модели было
+  // что-то ещё, кнопка честно откажет, а не откатит чужое.
+  function offerUndoTurn(box) {
+    var turnId = state.turnId;
+    rb('undo_info', { turn_id: turnId }).then(function (info) {
+      var n = info && info.steps;
+      if (!n) return;
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'btn msg__remember msg__undo';
+      b.textContent = 'Отменить ход (' + n + ' ' + plural(n, 'шаг', 'шага', 'шагов') + ')';
+      b.title = 'Откатить всё, что модель сделала в этом ходе';
+      b.onclick = function () {
+        if (state.busy) return;
+        b.disabled = true;
+        rb('undo_turn', { turn_id: turnId }).then(function (r) {
+          var note = document.createElement('span'); note.className = 'msg__note';
+          note.textContent = r && r.ok !== false ? (r.text || 'Ход отменён.') : (r && r.error) || 'Отменить не удалось.';
+          b.replaceWith(note);
+        });
+      };
+      box.appendChild(b); scrollDown();
+    });
+  }
+
+  function plural(n, one, few, many) {
+    var m10 = n % 10, m100 = n % 100;
+    return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
+  }
+
   function offerRemember() {
     if (state.turnOps === 0) return;
     var bubbles = chat.querySelectorAll('.msg--assistant');
     var last = bubbles[bubbles.length - 1];
     if (!last || last.querySelector('.msg__actions')) return;
     var box = document.createElement('div'); box.className = 'msg__actions';
+    offerUndoTurn(box);
     var b = document.createElement('button'); b.type = 'button'; b.className = 'btn msg__remember'; b.textContent = 'Запомнить приём';
     b.onclick = function () {
       if (state.busy) return;
@@ -755,23 +793,19 @@
     var el = addTool(msg);
     var run;
     if (msg.name === 'execute_ruby') {
-      // Первый УСПЕШНЫЙ вызов хода открывает пункт Undo с именем задания,
-      // остальные сливаются в него. Упавший вызов пункт не открывает: иначе
-      // следующий стал бы прозрачным и слился с предыдущим ходом.
-      var first = !state.turnOpened;
-      run = rb('execute_ruby', { code: msg.args.code, label: first ? 'Ход: ' + (state.turnLabel || msg.args.label || '') : msg.args.label, transparent: !first })
-        .then(function (result) { if (result && result.ok !== false) { state.turnOpened = true; state.turnOps += 1; } return result; });
+      // Каждый вызов — свой пункт Undo «задача · шаг»; журнал в Ruby знает,
+      // какие пункты сверху стека принадлежат этому ходу.
+      run = rb('execute_ruby', { code: msg.args.code, label: stepLabel(msg.args.label), turn_id: state.turnId })
+        .then(function (result) { if (result && result.ok !== false) state.turnOps += 1; return result; });
     }
-    else if (msg.name === 'scenes') run = rb('scenes', msg.args || {});
+    else if (msg.name === 'scenes') run = rb('scenes', Object.assign({}, msg.args || {}, { turn_id: state.turnId }));
     else if (msg.name === 'get_scene') run = rb('scene_state', { full: true });
     else if (msg.name === 'select') run = rb('select', msg.args || {});
     else if (msg.name === 'render_vray') run = rb('render_vray', msg.args || {});
-    else if (msg.name === 'undo') run = rb('undo');
+    else if (msg.name === 'undo') run = rb('undo', { turn_id: state.turnId });
     else if (msg.name === 'build_massing') {
-      // Как execute_ruby: первый успешный вызов хода открывает пункт Undo, остальные сливаются.
-      var firstOp = !state.turnOpened;
-      run = rb('build_massing', { massing: msg.args.massing, transparent: !firstOp })
-        .then(function (result) { if (result && result.ok !== false) { state.turnOpened = true; state.turnOps += 1; } return result; });
+      run = rb('build_massing', { massing: msg.args.massing, turn_id: state.turnId })
+        .then(function (result) { if (result && result.ok !== false) state.turnOps += 1; return result; });
     }
     else run = Promise.reject(new Error('Неизвестный инструмент: ' + msg.name));
 
@@ -807,6 +841,7 @@
       return lines.join('\n');
     }
     if (name === 'build_massing' && result.ok !== false) return result.text || JSON.stringify(result);
+    if (name === 'undo') return result.ok !== false ? (result.text || 'Отменено.') : 'ОТКАЗ: ' + (result.error || 'отменять нечего');
     if (name === 'render_vray' && result.ok !== false) {
       return 'Рендер V-Ray готов: ' + result.width + '×' + result.height + ', ' + result.seconds + ' с, состояние ' + result.state + '. Картинка приложена.' +
         (result.saved_to ? ' Сохранено: ' + result.saved_to : '') + (result.save_error ? ' Не удалось сохранить на диск: ' + result.save_error : '');

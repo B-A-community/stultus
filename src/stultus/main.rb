@@ -10,7 +10,7 @@ require 'json'
 
 module BACommunity
   module Stultus
-    %w[constants settings history scene selection runner screenshot render_assets vray scenes attachments massing dialog].each do |name|
+    %w[constants undo_ledger settings history scene selection runner screenshot render_assets vray scenes attachments massing dialog].each do |name|
       require File.join(PLUGIN_PATH, name)
     end
 

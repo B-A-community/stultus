@@ -136,11 +136,15 @@ module BACommunity
         m = model
         # Прозрачная операция: сливается с предыдущим шагом истории правок,
         # своего пункта в Undo не заводит.
-        m.start_operation("#{PLUGIN_NAME}: переписка", true, false, true)
-        dict = m.attribute_dictionary(DICTIONARY, true)
-        dict[key] = value
-        dict[KEY_VERSION] = VERSION
-        m.commit_operation
+        # Запись переписки — служебная: в журнал шагов модели не идёт и
+        # не считается чужим действием (см. undo_ledger.rb).
+        UndoLedger.neutral do
+          m.start_operation("#{PLUGIN_NAME}: переписка", true, false, true)
+          dict = m.attribute_dictionary(DICTIONARY, true)
+          dict[key] = value
+          dict[KEY_VERSION] = VERSION
+          m.commit_operation
+        end
         true
       rescue StandardError
         m.abort_operation rescue nil

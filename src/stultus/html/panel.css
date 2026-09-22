@@ -45,3 +45,4 @@
 .msg__images{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .msg__images img{max-width:180px;max-height:140px;border-radius:8px;border:1px solid var(--line);cursor:zoom-in}
 .is-drop .composer__row{border-color:var(--accent-text)}
+.msg__note{font-size:11px;color:var(--muted);align-self:center}

@@ -82,18 +82,19 @@ module BACommunity
           Selection.select(p['ids'], mode: (p['mode'] || 'replace').to_s, zoom: p['zoom'] ? true : false)
         end
 
+        # Каждый вызов модели — свой пункт Undo и запись в журнале шагов хода
+        # (undo_ledger.rb): так модель отменяет ровно свой последний шаг и не
+        # может откатить то, что пользователь сделал до или во время хода.
         register(dialog, 'execute_ruby') do |_id, p|
-          Runner.execute(
-            p['code'],
-            label:       p['label'],
-            # Второй и дальше вызовы хода — прозрачные операции: один Undo на ход.
-            transparent: p['transparent'] ? true : false,
-            timeout:     Settings.all['ruby_timeout'].to_f
-          )
+          UndoLedger.track(p['turn_id'], p['label']) do
+            Runner.execute(p['code'], label: p['label'], timeout: Settings.all['ruby_timeout'].to_f)
+          end
         end
 
         register(dialog, 'scenes') do |_id, p|
-          Scenes.run(p['action'], name: p['name'], description: p['description'])
+          UndoLedger.track(p['turn_id'], "сцены: #{p['action']}") do
+            Scenes.run(p['action'], name: p['name'], description: p['description'])
+          end
         end
 
         register(dialog, 'save_attachment') do |_id, p|
@@ -109,10 +110,14 @@ module BACommunity
           { accent: History.accent }
         end
 
-        register(dialog, 'undo') { |_id, _p| Runner.undo }
+        # Отмена моделью: только её последний шаг в текущем ходе.
+        register(dialog, 'undo') { |_id, p| UndoLedger.undo_step(p['turn_id']) }
+        # Кнопка «Отменить ход» под ответом и проверка, есть ли что отменять.
+        register(dialog, 'undo_turn') { |_id, p| UndoLedger.undo_turn(p['turn_id']) }
+        register(dialog, 'undo_info') { |_id, p| { steps: UndoLedger.steps_on_top(p['turn_id']) } }
         # Массинг по карте: контуры в метрах уже посчитаны на сервере.
         register(dialog, 'build_massing') do |_id, p|
-          Massing.build(p['massing'] || {}, transparent: p['transparent'] ? true : false)
+          UndoLedger.track(p['turn_id'], 'массинг') { Massing.build(p['massing'] || {}) }
         end
         # Карточка ждёт решения человека — поднять окно над SketchUp.
         register(dialog, 'attention') do |_id, _p|

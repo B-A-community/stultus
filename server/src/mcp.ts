@@ -31,7 +31,7 @@ export const MCP_SERVER_NAME = 'stultus'
 export const TOOL_NAMES = ['execute_ruby', 'get_scene', 'select', 'take_screenshot', 'render_viewport', 'render_vray', 'scenes', 'save_recipe', 'get_recipe', 'undo', 'ask_user', 'build_massing', 'street_view', 'browse'] as const
 
 function build(conn: PluginConnection): McpServer {
-  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.26' })
+  const server = new McpServer({ name: MCP_SERVER_NAME, version: '0.2.27' })
 
   server.registerTool('render_viewport', {
     title: 'Визуализация текущего кадра',
@@ -417,7 +417,10 @@ function build(conn: PluginConnection): McpServer {
     'undo',
     {
       title: 'Отменить',
-      description: 'Отменяет последнюю операцию в SketchUp (в том числе твой последний execute_ruby).',
+      description: 'Отменяет ТВОЙ последний шаг в текущем ходе: каждый execute_ruby, массинг или правка сцен — отдельный шаг. ' +
+        'Один вызов — один шаг. Действия пользователя и прошлые ходы не откатываются никогда: если сверху истории ' +
+        'не твой шаг из этого хода, инструмент откажет. Перед повторной попыткой не зови undo несколько раз подряд без нужды — ' +
+        'отменяй ровно неудачный шаг и строй заново.',
       inputSchema: {},
     },
     async () => {

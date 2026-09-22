@@ -27,7 +27,9 @@ JS зовёт `sketchup.<имя>(id, json)`, Ruby отвечает
 | `select` | `{ ids[], mode?, zoom? }` | `{ selected, text, missing_ids?, outside_context_ids? }` |
 | `render_vray` | `{ width?, height?, preset?, timeout? }` | асинхронно `{ ok, mime, base64, width, height, state, seconds }` |
 | `execute_ruby` | `{ code, label? }` | `{ ok, result, output }` или `{ ok: false, error, backtrace[], output }` |
-| `undo` | — | `{ ok }` |
+| `undo` | `{ turn_id }` | `{ ok, undone, text }` или `{ ok: false, error }` — снимает один шаг модели, только если он из этого хода и лежит сверху истории |
+| `undo_turn` | `{ turn_id }` | `{ ok, undone, text }` — кнопка «Отменить ход»: все шаги хода, пока они сверху |
+| `undo_info` | `{ turn_id }` | `{ steps }` — сколько шагов хода сверху истории |
 | `build_massing` | `{ massing, transparent? }` | `{ ok, built, failed, group_id, seconds, text }` — строит группу «Массинг» из готовых контуров в метрах (см. инструмент) |
 | `screenshot` | `{ view?, zoom_extents?, width?, height? }` | `{ ok, mime, base64, width, height, bytes }` |
 | `save_history` | `{ messages[] }` | `{ saved }` — сколько сообщений влезло под лимит |
@@ -103,7 +105,7 @@ Ruby → JS без запроса: `window.Stultus.selection({ count, text, by_t
 | `select` | `{ ids?, mode?, zoom? }` | Ruby, сразу |
 | `render_vray` | `{ width?, height?, preset? }` | Ruby асинхронно: ответ по событию окончания рендера V-Ray, с картинкой; только если в `instance.renderers` есть `vray` |
 | `take_screenshot` | `{ reason, view?, zoom_extents? }` | **пользователь**: карточка «Сделать снимок / Отказать» |
-| `undo` | `{}` | Ruby, сразу |
+| `undo` | `{}` (окно добавляет `turn_id`) | Ruby, сразу; журнал шагов — `undo_ledger.rb` |
 | `build_massing` | `{ label, radius, count, sources[], massing }` | Ruby, сразу. `massing = { place: { lat, lon, label, source }, radius, buildings[], sources[], stats }`; здание: `{ id, type, name?, address?, levels?, height, minHeight?, heightSource: height|levels|2gis|estimate, outer: [[x,y]…], inners: [[[x,y]…]…], area, distance, target? }`, координаты в метрах от точки запроса (X восток, Y север) |
 | `street_view` | — | Инструмент сервера, плагину не уходит: готовый кадр приходит отдельным сообщением `photo` |
 | `browse` | — | Инструмент сервера: браузер на gateway, снимок окна приходит сообщением `photo` |
