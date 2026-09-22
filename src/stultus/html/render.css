@@ -57,7 +57,16 @@
 .provider{flex-wrap:wrap;row-gap:6px;min-width:0}
 .provider select{min-width:0;text-overflow:ellipsis}
 .provider__field{flex:0 1 auto}
-.topbar{flex-wrap:wrap;row-gap:6px;min-width:0}
+/* Шапка всегда в одну строку: иконки не переезжают на второй этаж.
+   Не хватает места — сначала прячется текст статуса (остаётся цветная
+   точка, текст во всплывающей подсказке), потом ужимается заголовок;
+   иконки не сжимаются никогда. */
+.topbar{flex-wrap:nowrap;min-width:0}
+.topbar__title{flex:0 1 auto;min-width:0}
+.topbar__status{min-width:0;flex:0 1 auto}
+.topbar__actions{flex:none}
+@media (max-width:650px){.topbar__status{padding-top:0;height:32px}}
+@media (max-width:460px){.topbar__statusText{display:none}.topbar__status{padding:0 2px 0 4px;height:32px;cursor:default}.topbar{gap:8px}.topbar__actions .iconbtn{width:27px}}
 @media (max-width:420px){.provider{padding-left:16px;padding-right:16px}.topbar{padding-left:16px;padding-right:16px}.provider select{max-width:150px}}
 /* Рисовалка: два ряда — ползунки и инструменты; кнопки назад/вперёд со стрелками. */
 .mask__bar{flex-direction:column;align-items:stretch;gap:8px}

@@ -222,6 +222,8 @@
     state.wsState = s;
     app.dataset.state = state.busy ? 'busy' : s;
     $('connStatus').querySelector('.topbar__statusText').textContent = text;
+    // В узком окне текст статуса спрятан, остаётся точка: текст — в подсказке.
+    $('connStatus').title = text;
   }
 
   function setBusy(b) {

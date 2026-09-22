@@ -10,7 +10,7 @@ import { renderConfigured } from './render.ts'
 import { cancelAllEdits, cancelEdit, receiveUpload, runEdit } from './edit.ts'
 import { closeSession } from './browser.ts'
 
-const VERSION = '0.2.25'
+const VERSION = '0.2.26'
 
 /** Живые окна SketchUp по id соединения. */
 const connections = new Map<string, PluginConnection>()
